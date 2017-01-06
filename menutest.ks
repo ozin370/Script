@@ -1,6 +1,6 @@
 // Just setting up the terminal
 set terminal:brightness to 1.
-set terminal:width to 51.
+set terminal:width to 41.
 set terminal:height to 30.
 clearscreen.
 
@@ -8,9 +8,10 @@ runoncepath("lib_UI.ks").
 
 print "MenuTest.ks - " + ship:name at (1,1).
 horizontalLine(2,"=").
-verticalLineTo(40,3,20,"|").
-horizontalLineTo(21,0,41,"=").
-print "Some other part of the program displaying here.." at (1,26).
+//verticalLineTo(40,3,20,"|").
+//horizontalLineTo(21,0,41,"=").
+horizontalLine(21,"=").
+print "Some other part of the program.." at (1,26).
 
 
 local startLine is 4.		//the first menu item will start at this line in the terminal window
@@ -32,7 +33,7 @@ set mainMenu to list(
 	//list(name,type,get/set function,increment multiplier (for numbers)).
 	list("A number:",		"number", 	{ parameter p is sv. if p <> sv set number1 to p. return number1. }, 10),
 	list("Throttle:",		"number", 	{ parameter p is sv. if p <> sv lock throttle to min(1,max(0,p)). return round(throttle,3). }, 0.1),
-	list("Speed:",			"display", 	{ return round(ship:airspeed,1) + " m/s". }),
+	list("Speed:",			"display", 	{ return round(ship:airspeed) + " m/s". }),
 	list("[Stage]",			"action", 	{ stage. }),
 	list("",				"text"),	//just an empty line
 	list("Ship Name:",		"string", 	{ parameter p is sv. if p <> sv and p <> "" set ship:name to p. return ship:name. }),

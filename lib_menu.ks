@@ -28,7 +28,7 @@
 //			Needs a get/set anonymous function like shown above. 
 //			Needs the variable to have been declared by you elsewhere in your main program.
 //			Needs to have a increment multiplier set in it's list as shown above (a value of 10 will make the default increment 10).
-//  string: 
+//	string: 
 //			Can be edited by hitting enter with the line selected.
 //			Needs a get/set anonymous function like shown above. 
 //			Needs the variable to have been declared by you elsewhere in your main program.
@@ -107,7 +107,7 @@ function drawAll {
 	local i is 0.
 	inputs().
 	until i = activeMenu:length {
-		if notFoundSelectable and activeMenu[i][1] <> "text" {
+		if notFoundSelectable and not readOnlyTypes:contains(activeMenu[i][1]) { //skip read only lines
 			set selectedLine to i.
 			set notFoundSelectable to false.
 		}
@@ -124,7 +124,6 @@ function drawAll {
 local markerStr is ">> ".
 local markerTimer is time:seconds + 900000.
 function drawMarker {
-	//set markerStr to ">> ".
 	print markerStr at (C1-3,startLine + selectedLine). //print the arrow that displays the active selection
 	
 	//print relevant information at the end of the current line
@@ -267,7 +266,7 @@ function inputs {
 		inp:clear().
 	}
 	
-	if time:seconds > markerTimer + 0.2 { set markerStr to "<> ". set markerTimer to time:seconds + 900000. drawMarker(). }
+	if time:seconds > markerTimer + 0.2 { set markerStr to ">> ". set markerTimer to time:seconds + 900000. drawMarker(). }
 	
 }
 
@@ -329,7 +328,7 @@ function adjust {
 	local func is activeMenu[selectedLine][2].
 	set lineType to activeMenu[selectedline][1].
 	
-	set markerStr to " <>".
+	set markerStr to "> >".
 	set markerTimer to time:seconds.
 	
 	if lineType = "number" {
