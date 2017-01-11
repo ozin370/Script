@@ -14,6 +14,7 @@ horizontalLine(21,"=").
 print "Some other part of the program.." at (1,26).
 
 
+// use the first two of these varables to set the position of the menu. The last two affect the width of the menu.
 local startLine is 4.		//the first menu item will start at this line in the terminal window
 local startColumn is 4.		//menu item description starts at this x coordinate, remember to leave some space for the marker on the left
 local nameLength is 16.		//how many characters of the menu item names to display

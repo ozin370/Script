@@ -1,369 +1,340 @@
 @LAZYGLOBAL on.
 // autopilot
 runoncepath("lib_UI.ks").
-set terminal:brightness to 1.
+runoncepath("steeringmanager.ks").
+loadSteering().
 
-//sas off.
+sas off.
 set st to lookdirup(ship:facing:vector,up:vector).
-//lock steering to st.
+lock steering to st.
 set th to throttle.
 lock throttle to th.
 
 // #### PID ###
 // >>
-	function init_pitch_pid {
-	  return PIDLOOP(0.01, 0.005, 0.003, -1, 1).
-	}
-	function init_roll_pid {
-	  return PIDLOOP(0.005, 0.00005, 0.001, -1, 1).
-	}
+	
+	set maxBank to 60.
 	function init_bank_pid {
-	  return PIDLOOP(3, 0.00, 5, -45, 45).
+	  return PIDLOOP(3, 0.00, 4, -maxBank, maxBank).
 	}
-	function init_throt_pid {
-	  return PIDLOOP(0.1, 0.001, 0.05, 0, 1).
-	}
-
-	set pitchPid to init_pitch_pid().
 	set bankPid to init_bank_pid().
-	set rollPid to init_roll_pid().
-	set throtPid to init_throt_pid().
+	set bankHardPid to PIDLOOP(0.2, 0.01, 0.4, -90, 90).
+
+	set attackPid to PIDLOOP(3, 0.0, 10, -10, 10).
+	set pitchPid to PIDLOOP(1.5, 0.3, 2.0, -15, 15). //(1.5, 0.3, 5.0, -15, 15). //outputs extra climb angle to get the velocity climb angle corrected
+	
+	
+	// set rollPid to init_roll_pid().
+	set throtPid to PIDLOOP(0.1, 0.001, 0.05, 0, 1).
+	
+	set climbPid to PIDLOOP(0.4, 0.0, 0.05, -15, 15).
+	
+	set steeringmanager:rollcontrolanglerange to 180. //force steeringmanager not to ignore roll
 // << 
 
 // ### Initual Stuff / default vars ###
 // >>
-	set targetSpeed to 140.
-	set targetAlt to 1000.
+	set targetSpeed to round(airspeed).
+	set targetAlt to round(altitude).
 	set controlSpeed to true.
-	set controlAlt to false.
+	if altitude < 100 set controlAlt to false.
+	else set controlAlt to true.
+	
+	set targetHeading to round(headingOf(ship:facing:vector),2).
+	set targetPitch to 0.
 	
 	//settings default vars
 	set stallSpeed to 70.
-	set stableAoA to 10.
-	set maxAoA to 15.
+	set maxBankSpeed to 150.
+	set aoaHigh to 8. //high speeds
+	set aoaLow to 15. //at low speeds
+	set bankFactor to 1.
+	set bankHard to false.
 	
-	set testString to "tada".
-// <<
+	set vd_stTarget to vecs_add(v(0,0,0),v(0,0,0),green,"",0.2).
+	set vd_st to vecs_add(v(0,0,0),v(0,0,0),magenta,"",0.2).
+	set vd_vel to vecs_add(v(0,0,0),velocity:surface,yellow,"",0.2).
+	
+	function saveSettings {
+		local lex is lexicon(
+			"stallSpeed", stallSpeed,
+			"maxBankSpeed",maxBankSpeed,
+			"bankFactor",bankFactor,
+			"maxBank",maxBank
+		).
+		
+		local filePath is path("0:/json/" + ship:name + "/autopilot.json").
+		writejson(lex, filePath).
+	}
 
-set hudString to "test".
-function testFunction {
-	parameter s.
-	hudtext(s,5, 2, 35, yellow, false).
-}
+	function loadSettings {
+		local filePath is path("0:/json/" + ship:name + "/autopilot.json").
+		
+		if exists(filePath) {
+			local lex is readjson(filePath).
+			
+			set stallSpeed to lex["stallSpeed"].
+			set maxBankSpeed to lex["maxBankSpeed"].
+			set bankFactor to lex["bankFactor"].
+			set maxBank to lex["maxBank"].
+			return true.
+		}
+		else return false.
+	}
+	
+	loadSettings().
+// <<
 
 // ### Console ###
 // >>
 
 
+set terminal:brightness to 1.
+set terminal:width to 44.
+set terminal:height to 45.
+clearscreen.
 
-set defaultMenu to list(
+
+// use the first two of these varables to set the position of the menu. The last two affect the width of the menu.
+local startLine is 4.		//the first menu item will start at this line in the terminal window
+local startColumn is 4.		//menu item description starts at this x coordinate, remember to leave some space for the marker on the left
+local nameLength is 21.		//how many characters of the menu item names to display
+local valueLength is 8.	//how many characters of the menu item values to display
+local sv is -9.9993134. 	// just a value that is extremely unlikely to be set to any of the varibles we want to change with the menu
+runpath("lib_menu.ks").
+
+
+set mainMenu to list(
+	//list("Modes",		"text"),
+	list("Speed:",		"number", 	{ parameter p is sv. if p <> sv set targetSpeed to max(0,round(p)). return targetSpeed. }, 10),
+	list("-",			"line"),
+	list("Heading:",	"number", 	{ parameter p is sv. if p <> sv { if p > 360{set p to p - 360.} else if p < 0{set p to 360 + p.} set targetHeading to p. } return round(targetHeading,2). }, 1),
+	list("Climb:",		"number", 	{ parameter p is sv. if p <> sv set targetPitch to max(-90,min(90,p)). return round(targetPitch,1). }, 1),
+	list("",			"text"),
+	list("Alt ctrl:",	"bool", 	{ parameter p is sv. if p <> sv set controlAlt to boolConvert(p). return controlAlt. }),
+	list("Altitude:",	"number", 	{ parameter p is sv. if p <> sv set targetAlt to max(0,round(p,1)). return targetAlt. }, 10),
+	
+	list("Bank Hard:",	"bool", 	{ parameter p is sv. if p <> sv set bankHard to boolConvert(p). return bankHard. }),
+	
+	list("-",			"line"),
+	list("[>] STEERINGMANAGER",	"menu" , 	{ return steeringMenu. }),
+	list("[>] VESSEL SETTINGS",	"menu" , 	{ return settingsMenu. }),
+	list("[X] Exit", 			"action", { set done to true. })
+).
+
+set steeringMenu to list(
+	list("[>] Angular Velocity PID",	"menu", { return pidMenu. }),
+	list("-",						"line"),
+	list("Pitch settling time:",	"number", { parameter p is sv. if p <> sv set steeringmanager:pitchts to max(0.01,round(p,2)). return steeringmanager:pitchts. }, 0.1),
+	list("Yaw settling time:",		"number", { parameter p is sv. if p <> sv set steeringmanager:yawts to max(0.01,round(p,2)). return steeringmanager:yawts. }, 0.1),
+	list("Roll settling time:",		"number", { parameter p is sv. if p <> sv set steeringmanager:rollts to max(0.01,round(p,2)). return steeringmanager:rollts. }, 0.1),
+	list("",						"text"),
+	list("Max stopping time:",		"number", { parameter p is sv. if p <> sv set steeringmanager:maxstoppingtime to max(0.01,round(p,2)). return steeringmanager:maxstoppingtime. }, 0.1),
+	list("Roll ctrl ang range:",	"number", { parameter p is sv. if p <> sv set steeringmanager:rollcontrolanglerange to round(p,2). return steeringmanager:rollcontrolanglerange. }, 1),
+	list("",						"text"),
+	list("Angle error:",			"display", { return round(steeringmanager:angleerror,2). }),
+	list("Pitch error:",			"display", { return round(steeringmanager:pitcherror,2). }),
+	list("Yaw error:",				"display", { return round(steeringmanager:yawerror,2). }),
+	list("Roll error:",				"display", { return round(steeringmanager:rollerror,2). }),
+	list("-",						"line"),
+	list("Pitch torq adjust:",		"number", { parameter p is sv. if p <> sv set steeringmanager:pitchtorqueadjust to round(p,2). return steeringmanager:pitchtorqueadjust. }, 1),
+	list("Pitch torq factor:",		"number", { parameter p is sv. if p <> sv set steeringmanager:pitchtorquefactor to max(0.01,round(p,2)). return steeringmanager:pitchtorquefactor. }, 0.1),
+	list("",						"text"),
+	list("Yaw torq adjust:",		"number", { parameter p is sv. if p <> sv set steeringmanager:yawtorqueadjust to round(p,2). return steeringmanager:yawtorqueadjust. }, 1),
+	list("Yaw torq factor:",		"number", { parameter p is sv. if p <> sv set steeringmanager:yawtorquefactor to max(0.01,round(p,2)). return steeringmanager:yawtorquefactor. }, 0.01),
+	list("",						"text"),
+	list("Roll torq adjust:",		"number", { parameter p is sv. if p <> sv set steeringmanager:rolltorqueadjust to round(p,2). return steeringmanager:rolltorqueadjust. }, 1),
+	list("Roll torq factor:",		"number",	{ parameter p is sv. if p <> sv set steeringmanager:rolltorquefactor to max(0.01,round(p,2)). return steeringmanager:rolltorquefactor. }, 0.01),
+	list("-",						"line"),
+	list("Facing vecs:",			"bool", { parameter p is sv. if p <> sv set steeringmanager:showfacingvectors to boolConvert(p). return steeringmanager:showfacingvectors. }),
+	list("Angular vecs:",			"bool", { parameter p is sv. if p <> sv set steeringmanager:showangularvectors to boolConvert(p). return steeringmanager:showangularvectors. }),
+	list("Write CSV files:",		"bool", { parameter p is sv. if p <> sv set steeringmanager:writecsvfiles to boolConvert(p). return steeringmanager:writecsvfiles. }),
+	list("-",						"line"),
+	list("[ ] REVERT CHANGES", 		"action", { loadSteering(). }),
+	list("", 						"text"),
+	list("[ ] SAVE CHANGES", 		"action", { saveSteering(). }),
+	list("[<] MAIN MENU",			"backmenu", { return mainMenu. })
+).
+
+set pidMenu to list(
+	list("Pitch kP:", "number", { parameter p is sv. if p <> sv set steeringmanager:pitchpid:kp to max(0,p). return steeringmanager:pitchpid:kp. }, 0.1),
+	list("Pitch kI:", "number", { parameter p is sv. if p <> sv set steeringmanager:pitchpid:ki to max(0,p). return steeringmanager:pitchpid:ki. }, 0.1),
+	list("Pitch kD:", "number", { parameter p is sv. if p <> sv set steeringmanager:pitchpid:kd to max(0,p). return steeringmanager:pitchpid:kd. }, 0.1),
+	list("Setpoint:", "display", { return round(steeringmanager:pitchpid:setpoint,2). }, 1),
+	list("Error:", "display", { return round(steeringmanager:pitchpid:error,2). }, 1),
+	list("Output:", "display", { return round(steeringmanager:pitchpid:output,2). }, 1),
+	list("-", "line"),
+	list("Yaw kP:", "number", { parameter p is sv. if p <> sv set steeringmanager:yawpid:kp to max(0,p). return steeringmanager:yawpid:kp. }, 0.1),
+	list("Yaw kI:", "number", { parameter p is sv. if p <> sv set steeringmanager:yawpid:ki to max(0,p). return steeringmanager:yawpid:ki. }, 0.1),
+	list("Yaw kD:", "number", { parameter p is sv. if p <> sv set steeringmanager:yawpid:kd to max(0,p). return steeringmanager:yawpid:kd. }, 0.1),
+	list("Setpoint:", "display", { return round(steeringmanager:yawpid:setpoint,2). }, 1),
+	list("Error:", "display", { return round(steeringmanager:yawpid:error,2). }, 1),
+	list("Output:", "display", { return round(steeringmanager:yawpid:output,2). }, 1),
+	list("-", "line"),
+	list("Roll kP:", "number", { parameter p is sv. if p <> sv set steeringmanager:rollpid:kp to max(0,p). return steeringmanager:rollpid:kp. }, 0.1),
+	list("Roll kI:", "number", { parameter p is sv. if p <> sv set steeringmanager:rollpid:ki to max(0,p). return steeringmanager:rollpid:ki. }, 0.1),
+	list("Roll kD:", "number", { parameter p is sv. if p <> sv set steeringmanager:rollpid:kd to max(0,p). return steeringmanager:rollpid:kd. }, 0.1),
+	list("Setpoint:", "display", { return round(steeringmanager:rollpid:setpoint,2). }, 1),
+	list("Error:", "display", { return round(steeringmanager:rollpid:error,2). }, 1),
+	list("Output:", "display", { return round(steeringmanager:rollpid:output,2). }, 1),
+	list("-", "line"),
+	list("[ ] Reset PIDs", "action", { steeringmanager:resetpids(). }),
+	list("[ ] REVERT CHANGES", "action", { loadSteering(). }),
+	list("", "text"),
+	list("[ ] SAVE CHANGES", "action", { saveSteering(). }),
+	list("[<] BACK",		"backmenu", { return steeringMenu. })
+).
+
+set manualMenu to list(
 	//list(name,type,get/set function,increment multiplier (for numbers)).
-
-	list("Speed:",		"number", 	{ parameter p is "x". if p <> "x" set targetSpeed to p. return targetSpeed. }, 1),
-	list("Altitude:",	"number", 	{ parameter p is "x". if p <> "x" set targetAlt to p. return targetAlt. }, 10),
+	list("Main Menu > Mode: Manual",					"text"),
+	list("-",						"line"),
+	list("Speed:",		"number", 	{ parameter p is sv. if p <> sv set targetSpeed to p. return targetSpeed. }, 1),
+	list("Altitude:",	"number", 	{ parameter p is sv. if p <> sv set targetAlt to p. return targetAlt. }, 10),
 	list("",			"text"),
-	list("Throttle:",	"bool" , 	{ parameter p is "x". if p <> "x" set controlSpeed to p. return controlSpeed. }),
-	list("Altitude:",	"bool" , 	{ parameter p is "x". if p <> "x" set controlAlt to p. return controlAlt. }),
+	list("Throttle:",	"bool" , 	{ parameter p is sv. if p <> sv set controlSpeed to p. return controlSpeed. }),
+	list("Altitude:",	"bool" , 	{ parameter p is sv. if p <> sv set controlAlt to p. return controlAlt. }),
 	list("",			"text"),
-	list("Test text",	"string",	{ parameter p is "x". if p <> "x" set hudString to p. return hudString. }),
-	list("Show on HUD",	"action",	{ testFunction(hudString).}),
-	list("",			"text"),
-	list("[SETTINGS]",	"menu" , 	{ return settingsMenu. }),
-	list("",			"text")
+	list("[<] MAIN MENU",	"backmenu", { return mainMenu. })
 ).
 
 set settingsMenu to list(
 	//list(name,type,get/set function,increment multiplier (for numbers)).
 
-	list("Stall Spd:",	"number", 	{ parameter p is "x". if p <> "x" set stallSpeed to p. return stallSpeed. }, 1),
-	list("AoA:",		"number", 	{ parameter p is "x". if p <> "x" set stableAoA to p. return stableAoA. }, 0.1),
-	list("Max AoA:",	"number", 	{ parameter p is "x". if p <> "x" set maxAoA to p. return maxAoA. }, 0.1),
+	list("Stall Spd:",		"number", 	{ parameter p is sv. if p <> sv set stallSpeed to max(5,round(p)). return stallSpeed. }, 1),
+	list("AoA High Spd:",	"number", 	{ parameter p is sv. if p <> sv set aoaHigh to max(5,round(p,2)). return aoaHigh. }, 0.1),
+	list("AoA Low Spd:",	"number", 	{ parameter p is sv. if p <> sv set aoaLow to max(5,round(p,2)). return aoaLow. }, 0.1),
+	list("",				"text"),
+	list("Bank limit:",		"number", 	{ parameter p is sv. if p <> sv { set maxBank to max(10,round(p)). set bankPid to init_bank_pid(). } return maxBank. }, 10),
+	list("Bank Factor:",	"number", 	{ parameter p is sv. if p <> sv set bankFactor to max(0.1,round(p,2)). return bankFactor. }, 0.1),
+	list("Full Bank Spd:",	"number", 	{ parameter p is sv. if p <> sv set maxBankSpeed to max(stallSpeed + 10,round(p)). return maxBankSpeed. }, 10),
 	list("",			"text"),
-	list("[SUBMENU 1]",	"menu", 	{ return subMenu1. }),
-	list("[SUBMENU 2]",	"menu", 	{ return subMenu2. }),
-	list("[BACK]",		"backmenu", { return defaultMenu. })
-).
-
-set subMenu1 to list(
-	//list(name,type,get/set function,increment multiplier (for numbers)).
-	list("Just a dummy submenu","text"),
-	list("Test str:",	"string", 	{ parameter p is "x". if p <> "x" set testString to p. return testString. }),
-	list("[BACK]",	"backmenu" , 	{ return settingsMenu. })
-).
-
-set subMenu2 to list(
-	//list(name,type,get/set function,increment multiplier (for numbers)).
-	list("Another submenu","text"),
-	list("[BACK]",	"backmenu" , 	{ return settingsMenu. })
+	list("-",				"line"),
+	list("[ ] SAVE CHANGES",	"action", 	{ saveSettings(). }),
+	list("[<] MAIN MENU",		"backmenu", { return mainMenu. })
 ).
 
 // the list that defines the menu items: their names, types, and function
-set menuItems to defaultMenu.
-
-
-function drawAll {
-	set terminal:width to 51.
-	set terminal:height to 40.
-	clearscreen.
-	terminal:input:clear(). //clear inputs for new menues just in case..
-	set selectedLine to 0.
-	
-	//column starts
-	set C1 to 3. //menu item description starts here
-	set C2 to C1 + 12. //menu item values start here
-	set C3 to C2 + 8. //the increment display thingy starts here
-	
-	set menuL to 6. //menu option #1 starts at this line
-	
-	print "TEST TEST TEST TEST TEST TEST TEST TEST" at (0,0).
-	print "AutoPilot - " + ship:name at (1,1).
-	horizontalLine(2,"_").
-	
-	print "Targets:" at (C1,menuL-2).
-	horizontalLineTo(menuL-1,C1,C3-1,"-").
-	horizontalLineTo(menuL + menuItems:length,C1,C3-1,"-").
-	
-	local notFoundSelectable is true.
-	local i is 0.
-	inputs().
-	until i = menuItems:length {
-		if notFoundSelectable and menuItems[i][1] <> "text" {
-			set selectedLine to i.
-			set notFoundSelectable to false.
-		}
-		updateLine(i).
-		
-		//debug
-		print menuItems[i][0] + " = " + menuItems[i][1] at (1,menuL + menuItems:length + 2 + i).
-		
-		set i to i + 1.
-	}
-	drawMarker().
-}
-
-function drawMarker {
-	print ">> " at (C1-3,menuL + selectedLine).
-	if lineType = "number" {
-		set suffixString to "-+" + incrOptions[incrI] * menuItems[selectedLine][3].
-		print suffixString at (C3 + 1,menuL + selectedLine).
-	}
-	else if lineType = "bool" {
-		set suffixString to menuItems[selectedLine][2]():tostring().
-		print suffixString at (C3 + 1,menuL + selectedLine).
-	}
-}
-
-function clearMarkers {
-	print "   " at (C1-3,menuL + selectedLine).
-	
-	if lineType = "number" or lineType = "bool" {
-		local emptyString is "                             ".
-		print emptyString:substring(0,suffixString:length) at (C3 + 1,menuL + selectedLine).
-	}
-}
-// <<
-
-// ### Input ###
-// >>
-set typingNumber to false.
-set typingString to false.
-set lineType to menuItems[0][1].
-set selectedLine to 0.
-
-function inputs {
-	if typingNumber { //currently recording numbers, so ignore all other commands
-		updateLine(selectedLine,numberString).
-		if terminal:input:haschar() {
-			local inp is terminal:input.
-			local ch is inp:getchar().
-			if ch:tonumber(99) <> 99 or ch = "." or ch = "-" {
-				set numberString to numberstring + ch.
-				
-			}
-			else if ch = inp:backspace {
-				if numberString:length > 0 set numberString to numberString:remove(numberString:length-1,1).
-			}
-			else if ch = inp:enter or ch = "d" or ch = "w" or ch = "s"{
-				set typingNumber to false.
-				local converted is numberString:tonumber(-9999).
-				if converted <> -9999 { //valid
-					updateLine(selectedLine,numberString).
-					menuItems[selectedLine][2](converted). //change the actual variable through the function stored in the lex
-				}
-				set numberString to "".
-			}
-		}
-	}
-	else if typingString { //currently recording text
-		updateLine(selectedLine,stringString).
-		if terminal:input:haschar() {
-			local inp is terminal:input.
-			local ch is inp:getchar().
-			
-			if ch = inp:enter {
-				set typingString to false.
-				updateLine(selectedLine,stringString).
-				menuItems[selectedLine][2](stringString).
-				set stringString to "".
-			}
-			else if ch = inp:backspace {
-				if stringString:length > 0 set stringString to stringString:remove(stringString:length-1,1).
-			}
-			else set stringString to stringString + ch.
-		}
-	}
-		
-	else if terminal:input:haschar() { //not recording, so enable all other commands
-		local inp is terminal:input.
-		local ch is inp:getchar().
-		set lineType to menuItems[selectedLine][1].
-
-		local oldLine is selectedLine.
-		if ch = "w" or ch = inp:upcursorone {
-			clearMarkers().
-			
-			set selectedLine to selectedLine - 1.
-			if selectedLine < 0 set selectedLine to menuItems:length - 1.
-			until menuItems[selectedLine][1] <> "text" { //skip text lines as they have no values
-				set selectedLine to selectedLine - 1.
-				if selectedLine < 0 set selectedLine to menuItems:length - 1.
-			}
-			
-			set incrI to 2.
-			updateLine(oldLine).
-		}
-		else if ch = "s" or ch = inp:downcursorone {
-			clearMarkers().
-			set selectedLine to selectedLine + 1.
-			if selectedLine >= menuItems:length set selectedLine to 0.
-			until menuItems[selectedLine][1] <> "text" { //skip text lines as they have no values
-				set selectedLine to selectedLine + 1.
-				if selectedLine >= menuItems:length set selectedLine to 0.
-			}
-			
-			set incrI to 2.
-			updateLine(oldLine).
-		}
-		else if ch = "a" or ch = inp:leftcursorone adjust(-1).
-		else if ch = "d" or ch = inp:rightcursorone adjust(1).
-		else if ch = "q" { set incrI to max(0,incrI - 1). }
-		else if ch = "e" { set incrI to min(incrOptions:length - 1,incrI + 1). }
-		else if lineType = "number" and (ch:tonumber(99) <> 99 or ch = "-" or ch = inp:enter) {
-			set typingNumber to true.
-			if ch = inp:enter set numberString to menuItems[selectedLine][2]():tostring().
-			else set numberString to ch. 
-		}
-		else if ch = inp:enter {
-			if lineType = "menu" or lineType = "backmenu" or lineType = "bool" or lineType = "action" adjust(0).
-			else if lineType = "string" {
-				set stringString to menuItems[selectedLine][2]().
-				set typingString to true.
-			}
-			//else if lineType = "action" menuItems[selectedLine][2]().
-		}
-		else if ch = inp:backspace {
-			local i is 0.
-			until i >= menuItems:length {
-				if menuItems[i][1] = "backmenu" {
-					set selectedLine to i.
-					adjust(1).
-					set i to menuItems:length.
-				}
-				set i to i + 1.
-			}
-		}
-		
-		set lineType to menuItems[selectedLine][1].
-		clearMarkers().
-		drawMarker().
-		updateLine(selectedLine).
-		
-		inp:clear().
-	}
-	
-}
-
-set blink to 0.
-function updateLine {
-	parameter line,val is "x".
-	local nameStr is menuItems[line][0].
-	local valType is menuItems[line][1].
-	
-	if val = "x" and valType <> "text" and valType <> "action" { 
-		set val to menuItems[line][2]().
-		if valType = "number" set val to val:tostring().
-	}
-	
-	local blinkStr is "".
-	if (typingNumber or typingString) and line = selectedLine { //blinking cursor when typing in
-		if blink < 10 set blinkStr to "_".
-		else set blinkStr to " ".
-		set blink to blink + 1.
-		if blink > 20 set blink to 0.
-	}
-	
-	
-	local valStr is "".
-	if valType = "bool" {
-		if val set valStr to "[ X ]".
-		else set valStr to   "[   ]".
-	}
-	else if valType = "number" {
-		//if not typingNumber and val:tonumber(-99.9999) <> -99.9999 and val:tonumber() > 9999 set valStr to round(val:tonumber() / 1000,1) + "K".
-		if not typingNumber and val > 9999 set valStr to round(val:tonumber() / 1000,1) + "K".
-		else set valStr to val:tostring + blinkStr.
-	}
-	else if valType = "string" {
-		set val to val + blinkStr.
-		set valStr to val:substring(max(0,val:length - (C3-C2)),min(val:length,C3-C2)).
-	}
-	else set valStr to "".
-	set valStr to valStr:padleft(C3-C2).
-	local finalStr is nameStr:padright(C2-C1):substring(0,C2-C1) + valStr.
-	print finalStr at (C1,menuL + line).
-}
-
-
-set incrOptions to list (0.1,1,10,100,1000).
-set incrI to 2.
-
-function adjust {
-	parameter sign.
-	local func is menuItems[selectedLine][2].
-	set lineType to menuItems[selectedline][1].
-	
-	if lineType = "number" {
-		func(func() + sign * incrOptions[incrI] * menuItems[selectedLine][3]).
-	}
-	else if lineType = "bool" {
-		local val is func().
-		if sign = 0 toggle val.
-		else if sign < 0 set val to false.
-		else set val to true.
-		func(val).
-	}
-	else if lineType = "menu" or lineType = "backmenu" { // d
-		set menuItems to func().
-		drawAll().
-	}
-	else if lineType = "action" func().
-}
+set activeMenu to mainMenu.
 
 // <<
 
+function headingOf {
+	parameter vect. //0 = north, 90 = east
+	local ang is vang( vxcl(up:vector,vect) , north:vector ).
+	if vdot(heading(270,0):vector,vect) > 0 set ang to 360 - ang.
+	return ang.
+}
+function getBank { //thank you dunbaratu for letting me steal this one. 
+	local raw is vang(up:vector, - facing:starvector).
+	if vang(up:vector, facing:topvector) > 90 {
+		if raw > 90 return raw - 270.
+		else return raw + 90.
+	} else {
+		return 90 - raw.
+	}
+}
+
+local done is false.
+unlock wheelsteering.
 drawAll().
-
-
 // ### LOOP ###
-until false {
+until done {
 	inputs().
+	refreshAll().
 	
-	set forwardSpeed to vdot(ship:facing:vector,velocity:surface).
+	local shipfacing is ship:facing:vector.
+	local vel is velocity:surface.
+	set forwardSpeed to vdot(shipfacing,vel).
 	set th to throtPid:Update(time:seconds, forwardSpeed - targetSpeed).
+	if (forwardSpeed - targetSpeed) > 5 brakes on.
+	else brakes off.
 	
 	
+	local upVec is up:vector.
+	local hVel is vxcl(upVec,vel).
+	//local hFacing is vxcl(up:vector,ship:facing:vector).
 	
+	//local shipHeading is headingOf(hVel).
 	
+	// ### ALT ###
+	if controlAlt {
+		//set targetPitch to climbPid:update(time:seconds, (altitude + verticalspeed * 0.5) - targetAlt). 
+		
+		set verticalTarget to min(50,max(-50,(targetAlt - altitude)*0.3)).
+		set targetPitch to min(targetPitch + 0.1,max(targetPitch - 0.1,climbPid:update(time:seconds, verticalspeed - verticalTarget))). 
+	}
+	else {
+		set targetAlt to round(altitude,1).
+	}
 	
+	// ### HEADING ###
+	set stTarget to heading(targetHeading,targetPitch):vector.
+	set vecs[vd_stTarget]:vec to stTarget:normalized * 40.
+	local hStTarget is vxcl(upVec,stTarget).
+	local compassError is vang(hVel,hStTarget).
+	if compassError < 45 { //kind of hurts to do these 4 calculations an additional time...
+		set stNormal to vcrs(hVel,hStTarget).
+		set stTarget to angleaxis(vang(hVel,hStTarget)^0.5,stNormal) * stTarget.
+		set hStTarget to vxcl(upVec,stTarget).
+		set compassError to vang(hVel,hStTarget).
+	}
+	
+	local velPitch is 90 - vang(upVec,vel).
+	
+	if bankHard and compassError > -20 {
+		if vdot(vcrs(upVec,hVel),hStTarget) > 0 set compassError to -compassError.
+		
+		set stNormal to vcrs(vel,stTarget).
+		set st to angleaxis(min(15,vang(vel,stTarget)),stNormal) * vel.
+		
+		set stRoll to 90 + bankHardPid:update(time:seconds, targetPitch - velPitch ).
+		if compassError < 0 set stRoll to -stRoll.
+		
+		local rollVector is angleaxis(stRoll,shipfacing) * upVec.
+		set st to lookdirup(st,rollVector).
+	}
+	else {
+		local attackAngle is 10 + attackPid:update(time:seconds, velPitch - targetPitch). 
+			print "st attack ang: " + round(attackangle,2) + "   " at (1,terminal:height-2).
+		set stNormal to vcrs(vel,stTarget).
+		set st to angleaxis(min(attackAngle,vang(vel,stTarget)),stNormal) * vel.
+		
+		print "bank ang: " + round(getBank(),2) + "   " at (1,terminal:height-3).
+		local pitchAdjust is pitchPid:update(time:seconds, (velPitch - targetPitch) * cos(abs(getBank()))) .
+		set st to angleaxis(pitchAdjust,vcrs(hVel,upVec)) * st.
+		
+		local aoaLimit is aoaHigh.
+		//if vang(vel,st) > aoaLimit {
+		//	set stNormal to vcrs(vel,st).
+		//	set st to angleaxis(pitchAdjust,vcrs(hVel,upVec)) * st.
+		//}
+		
+		//roll w/ no pid
+		//local stRoll is min(maxBank,vang(hVel,hStTarget) * 1.5).
+		//if vdot(vcrs(upVec,hVel),stTarget) > 0 set stRoll to -stRoll.
+		
+		//roll with pid
+		if alt:radar < 12 set st to lookdirup(st,upVec).
+		else  {
+			if vdot(vcrs(upVec,hVel),hStTarget) > 0 set compassError to -compassError.
+			
+			set stRoll to bankPid:update(time:seconds, -compassError * bankFactor * max(0.05,min(1,(forwardSpeed - stallSpeed)/(maxBankSpeed-stallSpeed))) ).  
+			print "req bank: " + round(stRoll,2) + "   " at (1,terminal:height-4).
+			set bankPid:maxoutput to max(5,min(maxBank,maxBank * (forwardSpeed - stallSpeed)/(maxBankSpeed-stallSpeed))).
+			set bankPid:minoutput to -bankPid:maxoutput.
+			
+			local rollVector is angleaxis(stRoll,shipfacing) * upVec.
+			
+			set st to lookdirup(st,rollVector).
+		}
+	}
+	
+	// Vecs >>
+	set vecs[vd_vel]:vec to vel:normalized * 40.
+	set vecs[vd_st]:vec to st:vector:normalized * 40.
+	
+	// <<
 	wait 0.
 }
+sas on.

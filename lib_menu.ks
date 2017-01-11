@@ -44,12 +44,12 @@
 //			exactly like "menu" but this can also be triggered by pressing backspace
 
 // Controls:
-//	W/S/UpArrow/DownArrow: navigates the menu
-//	A/D: Runs commands, increments numbers
-//	Q/E: Changes number increment scale
-//	Enter: Runs commands, edits numbers and strings, toggles boolean values.
-//	Backspace: opens the parent menu if it exists (for submenues)
-//	Typing a number: When a number is selected, typing a number will start the number editor. Enter or W/S to confirm.
+//			W/S/UpArrow/DownArrow: navigates the menu
+//			A/D: Runs commands, increments numbers
+//			Q/E: Changes number increment scale
+//			Enter: Runs commands, edits numbers and strings, toggles boolean values.
+//			Backspace: opens the parent menu if it exists (for submenues)
+//			Typing a number: When a number is selected, typing a number will start the number editor. Enter or W/S to confirm.
 
 
 
@@ -121,6 +121,15 @@ function drawAll {
 	drawMarker().
 }
 
+local refreshTypes is list("number","display","string","bool").
+function refreshAll { //updates all values of the current menu in the terminal
+	local i is 0.
+	until i = activeMenu:length {
+		if refreshTypes:contains(activeMenu[i][1]) and not((typingNumber or typingString) and i = selectedLine) updateLine(i).
+		set i to i + 1.
+	}
+}
+
 local markerStr is ">> ".
 local markerTimer is time:seconds + 900000.
 function drawMarker {
@@ -135,12 +144,17 @@ function drawMarker {
 		set suffixString to activeMenu[selectedLine][2]():tostring().
 		print suffixString at (C3 + 1,startLine + selectedLine).
 	}
+	else if lineType = "menu" or lineType = "backmenu" {
+		set suffixString to "Menu".
+		print suffixString at (C3 + 1,startLine + selectedLine).
+	}
 }
 
+local typesWithSuffix is list("number","bool","menu","backmenu").
 function clearMarkers {
-	print "   " at (C1-3,startLine + selectedLine).
+	print "   " at (C1 - markerStr:length,startLine + selectedLine).
 	
-	if lineType = "number" or lineType = "bool" {
+	if typesWithSuffix:contains(lineType)  {
 		local emptyString is "                             ".
 		print emptyString:substring(0,suffixString:length) at (C3 + 1,startLine + selectedLine).
 	}
@@ -158,14 +172,14 @@ function inputs {
 		if terminal:input:haschar() {
 			local inp is terminal:input.
 			local ch is inp:getchar().
-			if ch:tonumber(99) <> 99 or ch = "." or ch = "-" {
+			if ch:tonumber(99) <> 99 or ch = "." or (numberString:length = 0 and ch = "-") {
 				set numberString to numberstring + ch.
 				
 			}
 			else if ch = inp:backspace {
 				if numberString:length > 0 set numberString to numberString:remove(numberString:length-1,1).
 			}
-			else if ch = inp:enter or ch = "d" or ch = "w" or ch = "s"{
+			else if ch = inp:enter or ch = "d" or ch = "w" or ch = "s"{ // confirm
 				set typingNumber to false.
 				local converted is numberString:tonumber(-9999).
 				if converted <> -9999 { //valid
@@ -173,7 +187,10 @@ function inputs {
 					activeMenu[selectedLine][2](converted). //change the actual variable through the function stored in the lex
 				}
 				set numberString to "".
-				updateLine(selectedLine).
+			}
+			else if unchar(ch) = 9 { //tab - cancel and revert
+				set typingNumber to false.
+				set numberString to "".
 			}
 		}
 	}
@@ -183,14 +200,19 @@ function inputs {
 			local inp is terminal:input.
 			local ch is inp:getchar().
 			
-			if ch = inp:enter {
+			if ch = inp:enter { // confirm
 				set typingString to false.
 				updateLine(selectedLine,stringString).
 				activeMenu[selectedLine][2](stringString).
 				set stringString to "".
 			}
-			else if ch = inp:backspace {
+			else if ch = inp:backspace { 
 				if stringString:length > 0 set stringString to stringString:remove(stringString:length-1,1).
+			}
+			else if unchar(ch) = 9 { //tab - cancel and revert
+				set typingString to false.
+				set stringString to "".
+				updateLine(selectedLine).
 			}
 			else set stringString to stringString + ch.
 		}
@@ -199,8 +221,9 @@ function inputs {
 	else if terminal:input:haschar() { //not recording, so enable all other commands
 		local inp is terminal:input.
 		local ch is inp:getchar().
+		if unchar(ch) = 9 set ch to inp:backspace.
 		set lineType to activeMenu[selectedLine][1].
-
+		
 		local oldLine is selectedLine.
 		if ch = "w" or ch = inp:upcursorone {
 			clearMarkers().
@@ -248,10 +271,11 @@ function inputs {
 		}
 		else if ch = inp:backspace {
 			local i is 0.
-			until i >= activeMenu:length {
+			until i >= activeMenu:length { //find the first "backmenu" item if it exists and trigger that
 				if activeMenu[i][1] = "backmenu" {
+					clearMarkers().
 					set selectedLine to i.
-					adjust(1).
+					adjust(0).
 					set i to activeMenu:length.
 				}
 				set i to i + 1.
@@ -266,10 +290,15 @@ function inputs {
 		inp:clear().
 	}
 	
-	if time:seconds > markerTimer + 0.2 { set markerStr to ">> ". set markerTimer to time:seconds + 900000. drawMarker(). }
+	else if time:seconds > markerTimer + 0.2 { 
+		set markerStr to ">> ".
+		set markerTimer to time:seconds + 900000.
+		drawMarker().
+	}
 	
 }
 
+local nonPaddedTypes is list("text","action","menu","backmenu").
 set blink to 0.
 function updateLine {
 	parameter line,val is "x".
@@ -278,7 +307,7 @@ function updateLine {
 	
 	local finalStr is "".
 	
-	if valType = "text" or valType = "action" {
+	if nonPaddedTypes:contains(valType) {
 		set finalStr to nameStr.
 	}
 	else if valType = "line" {
@@ -290,7 +319,7 @@ function updateLine {
 	else {
 		if val = "x"  { 
 			set val to activeMenu[line][2]().
-			if valType = "number" set val to val:tostring().
+			//if valType = "number" set val to val:tostring().
 		}
 		
 		local blinkStr is "".
@@ -309,14 +338,22 @@ function updateLine {
 		}
 		else if valType = "number" {
 			//if not typingNumber and val:tonumber(-99.9999) <> -99.9999 and val:tonumber() > 9999 set valStr to round(val:tonumber() / 1000,1) + "K".
-			if not typingNumber and val > 9999 set valStr to round(val:tonumber() / 1000,1) + "K".
-			else set valStr to val:tostring + blinkStr.
+			
+			set val to val + blinkStr.
+			if not typingNumber and abs(val:tonumber()) > 9999 set valStr to round(val:tonumber() / 1000,1) + "K".
+			set valStr to val.
 		}
 		else if valType = "string" or valType = "display" {
-			set val to val + blinkStr.
-			set valStr to val:substring(max(0,val:length - (C3-C2)),min(val:length,C3-C2)).
+			if typingString {
+				set val to val + blinkStr.
+				set valStr to val:substring(max(0,val:length - (C3-C2)),min(val:length,C3-C2)).
+			}
+			else {
+				set val to val:tostring().
+				set valStr to val:substring(0,min(val:length,C3-C2)).
+			}
 		}
-		set valStr to valStr:padleft(C3-C2).
+		set valStr to valStr:padright(C3-C2).
 		set finalStr to nameStr:padright(C2-C1):substring(0,C2-C1) + valStr.
 	}
 	
@@ -334,19 +371,34 @@ function adjust {
 	if lineType = "number" {
 		func(func() + sign * incrOptions[incrI] * activeMenu[selectedLine][3]).
 	}
-	else if lineType = "bool" {
-		func(1).
+	else if lineType = "bool" {		
+		//if sign = -1 func(true).
+		//else func(false).
+		func(sign).
+		
 	}
 	else if lineType = "menu" or lineType = "backmenu" { // d
-		clearMarkers().
-		set lastMenu to activeMenu.
-		set activeMenu to func().
-		drawAll().
+		setMenu(func()).
 		set markerTimer to 0.
 	}
 	else if lineType = "action" func().
 	
 	
+}
+
+function setMenu {
+	parameter menu.
+	clearMarkers().
+	set lastMenu to activeMenu.
+	set activeMenu to menu.
+	drawAll().
+}
+
+function boolConvert {
+	parameter val.
+	if val = -1 set val to false.
+	else set val to true.
+	return val.
 }
 
 // <<

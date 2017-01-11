@@ -43,3 +43,35 @@ function clearBox {
 		set line to line + 1.
 	}
 }
+
+/////////////////////// VECTORS ///////////////////////////
+
+// vecs_clear().
+function vecs_clear {
+	if vecs:length > 0 {
+		for vd in vecs {
+			set vd:SHOW TO false.
+		}
+		vecs:clear.
+	}
+	clearvecdraws().
+}
+
+// set [variable] to vecs_add([position],[vector],[color],[string]).
+// returns: list index. 
+// example: 
+//  Create a vecdraw:
+//  set velocityVec to vecs_add(ship:position,velocity:orbit,blue,round(velocity:orbit:mag) + " m/s").
+//  Update it's starting position:
+//  set vecs[velocityVec]:start to ship:position.
+function vecs_add {
+	parameter p,v,c,descr,w.
+	vecs:add(VECDRAWARGS(p, v, c, descr, 1, true,w)).
+	return vecs:length - 1.
+}
+
+
+global vecs is list().
+clearvecdraws().
+
+////////////////////////////////////////////////////////// 
