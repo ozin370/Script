@@ -91,7 +91,7 @@ function drawAll {
 	
 	//clearscreen.
 	
-	terminal:input:clear(). //clear inputs for new menues just in case..
+	terminal:input:clear(). //clear inputs for new menus just in case..
 	set selectedLine to 0.
 	set lineType to activeMenu[selectedLine][1].
 	
@@ -106,7 +106,7 @@ function drawAll {
 	local notFoundSelectable is true.
 	local i is 0.
 	inputs().
-	until i = activeMenu:length {
+	until i >= activeMenu:length {
 		if notFoundSelectable and not readOnlyTypes:contains(activeMenu[i][1]) { //skip read only lines
 			set selectedLine to i.
 			set notFoundSelectable to false.
@@ -124,8 +124,10 @@ function drawAll {
 local refreshTypes is list("number","display","string","bool").
 function refreshAll { //updates all values of the current menu in the terminal
 	local i is 0.
-	until i = activeMenu:length {
-		if refreshTypes:contains(activeMenu[i][1]) and not((typingNumber or typingString) and i = selectedLine) updateLine(i).
+	until i >= activeMenu:length {
+		if refreshTypes:contains(activeMenu[i][1]) and not((typingNumber or typingString) and i = selectedLine) {
+			updateLine(i).
+		}
 		set i to i + 1.
 	}
 }
@@ -349,7 +351,7 @@ function updateLine {
 				set valStr to val:substring(max(0,val:length - (C3-C2)),min(val:length,C3-C2)).
 			}
 			else {
-				set val to val:tostring().
+				if not val:istype("string") set val to val:tostring().
 				set valStr to val:substring(0,min(val:length,C3-C2)).
 			}
 		}
