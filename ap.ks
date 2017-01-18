@@ -22,7 +22,7 @@ local cam is addons:camera:flightcamera.
 	set bankHardPid to PIDLOOP(0.2, 0.01, 0.4, -90, 90).
 
 	set attackPid to PIDLOOP(3, 0.0, 10, -10, 10).
-	set pitchPid to PIDLOOP(1.5, 0.3, 2.0, -15, 15). //(1.5, 0.3, 5.0, -15, 15). //outputs extra climb angle to get the velocity climb angle corrected
+	set pitchPid to PIDLOOP(1.5, 0.5, 2.0, -15, 15). //(1.5, 0.3, 5.0, -15, 15). //outputs extra climb angle to get the velocity climb angle corrected
 	
 	
 	// set rollPid to init_roll_pid().
@@ -67,6 +67,7 @@ local cam is addons:camera:flightcamera.
 	local bankHard is false.
 	local updateCam is false.
 	local clockwise is true.
+	local landingRadius is 2000.
 	
 	local vd_stTarget is vecs_add(v(0,0,0),v(0,0,0),green,"",0.2).
 	local vd_st is vecs_add(v(0,0,0),v(0,0,0),magenta,"",0.2).
@@ -81,7 +82,8 @@ local cam is addons:camera:flightcamera.
 			"stallSpeed", stallSpeed,
 			"maxBankSpeed",maxBankSpeed,
 			"bankFactor",bankFactor,
-			"maxBank",maxBank
+			"maxBank",maxBank,
+			"landingRadius",landingRadius
 		).
 		
 		local filePath is path("0:/json/" + ship:name + "/autopilot.json").
@@ -94,10 +96,11 @@ local cam is addons:camera:flightcamera.
 		if exists(filePath) {
 			local lex is readjson(filePath).
 			
-			set stallSpeed to lex["stallSpeed"].
-			set maxBankSpeed to lex["maxBankSpeed"].
-			set bankFactor to lex["bankFactor"].
-			set maxBank to lex["maxBank"].
+			if lex:haskey("stallSpeed") set stallSpeed to lex["stallSpeed"].
+			if lex:haskey("maxBankSpeed") set maxBankSpeed to lex["maxBankSpeed"].
+			if lex:haskey("bankFactor") set bankFactor to lex["bankFactor"].
+			if lex:haskey("maxBank") set maxBank to lex["maxBank"].
+			if lex:haskey("landingRadius") set landingRadius to lex["landingRadius"].
 			return true.
 		}
 		else return false.
@@ -133,7 +136,7 @@ set mainMenu to list(
 	list("",			"text"),
 	list("Mode:",		"display",	{ return modeString. }),
 	list("-",			"line"),
-	list("Speed:",		"number", 	{ parameter p is sv. if p <> sv set targetSpeed to max(0,round(p)). return targetSpeed. }, 10),
+	list("Speed:",		"number", 	{ parameter p is sv. if p <> sv set targetSpeed to max(0,round(p)). return round(targetSpeed). }, 10),
 	list("",			"text"),
 	list("Heading:",	"number", 	{ parameter p is sv. if p <> sv {
 										if p > 360 set p to p - 360. 
@@ -146,7 +149,7 @@ set mainMenu to list(
 	list("Climb:",		"number", 	{ parameter p is sv. if p <> sv set targetPitch to max(-90,min(90,p)). return round(targetPitch,2). }, 1),
 	list("",			"text"),
 	list("Alt ctrl:",	"bool", 	{ parameter p is sv. if p <> sv set controlAlt to boolConvert(p). return controlAlt. }),
-	list("Altitude:",	"number", 	{ parameter p is sv. if p <> sv set targetAlt to max(0,round(p,1)). return targetAlt. }, 10),
+	list("Altitude:",	"number", 	{ parameter p is sv. if p <> sv set targetAlt to max(0,round(p,1)). return round(targetAlt,1). }, 10),
 	
 	list("Bank Hard:",	"bool", 	{ parameter p is sv. if p <> sv set bankHard to boolConvert(p). return bankHard. }),
 	list("-",			"line"),
@@ -171,12 +174,13 @@ set modesMenu to list(
 	list("Land",	"action", 	{ 
 		if mode <> m_land {
 			set mode to m_land. 
-			set submode to m_land.
+			set submode to m_circle.
 			set modeString to "landing".
 			set vecs[vd_pos]:show to true.
 		}
 		set runwayStart to selectedRunway[1].
 		set runwayEnd to selectedRunway[2].
+		set runLandingSetup to true.
 		setMenu(mainMenu).
 	}),
 	list("Circle",	"action", 	{
@@ -287,10 +291,12 @@ set settingsMenu to list(
 	list("Bank limit:",		"number", 	{ parameter p is sv. if p <> sv { set maxBank to max(10,round(p)). set bankPid to init_bank_pid(). } return maxBank. }, 10),
 	list("Bank Factor:",	"number", 	{ parameter p is sv. if p <> sv set bankFactor to max(0.1,round(p,2)). return bankFactor. }, 0.1),
 	list("Full Bank Spd:",	"number", 	{ parameter p is sv. if p <> sv set maxBankSpeed to max(stallSpeed + 10,round(p)). return maxBankSpeed. }, 10),
-	list("",			"text"),
+	list("",				"text"),
+	list("Landing:",		"text"),
+	list("Turn radius:",	"number", 	{ parameter p is sv. if p <> sv set landingRadius to max(500,round(p)). return landingRadius. }, 100),
 	list("-",				"line"),
-	list("[ ] SAVE CHANGES",	"action", 	{ saveSettings(). }),
-	list("[<] MAIN MENU",		"backmenu", { return mainMenu. })
+	list("[ ] SAVE CHANGES","action", 	{ saveSettings(). }),
+	list("[<] MAIN MENU",	"backmenu", { return mainMenu. })
 ).
 
 // the list that defines the menu items: their names, types, and function
@@ -348,22 +354,56 @@ until done {
 	if mode = m_land {
 		//selectedRunway(namestr,geo1,geo2)
 		local pos1 is runwayStart:position.
+		local pos1dist is vxcl(upVec,pos1):mag.
 		local pos2 is runwayEnd:position.
 		local runwayVec is vxcl(upVec,pos2-pos1).
 		
-		local sideVec is -vxcl(upVec,vxcl(runwayVec,pos1)).
+		local heightAbove is vdot(-upVec,pos1).
 		
-		if vang(sideVec, vcrs(upVec,runwayVec)) < 90 set clockwise to true.
-		else set clockwise to false.
-		
-		set circleRadius to 2000.
-		local turnCenter is pos1 - runwayVec:normalized * 2000 + sideVec:normalized * circleRadius.
-		set circleLoc to body:geopositionof(turnCenter).
-		
-		set vecs[vd_pos]:start to turnCenter.
-		
-		
-		set submode to m_circle.
+		if submode = m_manual or (vang(vxcl(upVec,pos1),runwayVec) < 5 and vang(hVel,runwayVec) < 5 and heightAbove < 400 and pos1dist < 4100) {
+			set submode to m_manual.
+			set runwayVec to runwayVec:normalized.
+			
+			local offset is vdot(-runwayVec,pos1) + 400.
+			local aimPosHeading is pos1 + runwayVec:normalized * max(-1500,offset).
+			local aimPosPitch is pos1 + runwayVec:normalized * max(100,offset).
+			
+			set targetPitch to min(-0.2, 90 - vang(aimPosPitch,upVec)).
+			
+			set targetHeading to headingOf(aimPosHeading).
+			set controlAlt to false.
+			
+			if ship:status = "landed" set targetSpeed to 0.
+			else set targetSpeed to min(stallSpeed + heightAbove/10,targetSpeed).
+		}
+		else {
+			set submode to m_circle.
+			
+			if runLandingSetup {
+				local sideVec is -vxcl(upVec,vxcl(runwayVec,pos1)).
+				
+				if vang(sideVec, vcrs(upVec,runwayVec)) < 90 set clockwise to true.
+				else set clockwise to false.
+				
+				set circleRadius to landingRadius.
+				local turnCenter is pos1 - runwayVec:normalized * 4000 + sideVec:normalized * circleRadius.
+				set circleLoc to body:geopositionof(turnCenter).
+				
+				set runLandingSetup to false.
+			}
+			
+			local runwayAlt is runwayStart:terrainheight.
+			
+			set controlAlt to true.
+			if vxcl(upVec,circleLoc:position):mag < circleRadius + 500 {
+				set targetAlt to runwayAlt + 300.
+				set targetSpeed to maxBankSpeed + 10.
+			}
+			else {
+				set targetAlt to max(runwayAlt + 300,targetAlt).
+				set targetSpeed to max(maxBankSpeed + 20,targetSpeed).
+			}
+		}
 	}
 	if submode = m_circle {
 		if hasTarget and mode <> m_land set circleLoc to target:geoposition.

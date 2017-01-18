@@ -1,0 +1,15 @@
+{
+    "entries": [
+        "stallSpeed",
+        75,
+        "maxBankSpeed",
+        110,
+        "bankFactor",
+        1,
+        "maxBank",
+        55,
+        "landingRadius",
+        1500
+    ],
+    "$type": "kOS.Safe.Encapsulation.Lexicon"
+}
