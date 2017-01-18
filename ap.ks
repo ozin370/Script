@@ -327,7 +327,7 @@ function faceCamTo {
 
 	set cam:position to angleaxis(cam:pitch,vcrs(up:vector,horizontalVec)) * -horizontalVec:normalized * cam:distance.
 }
-		// <<
+// <<
 
 local done is false.
 unlock wheelsteering.
@@ -360,7 +360,7 @@ until done {
 		
 		local heightAbove is vdot(-upVec,pos1).
 		
-		if submode = m_manual or (vang(vxcl(upVec,pos1),runwayVec) < 5 and vang(hVel,runwayVec) < 5 and heightAbove < 400 and pos1dist < 4100) {
+		if submode = m_manual or (vang(vxcl(upVec,pos1),runwayVec) < 5 and vang(hVel,runwayVec) < 5 and heightAbove < 400 and pos1dist < (2200 + 20 * maxBankSpeed)) {
 			set submode to m_manual.
 			set runwayVec to runwayVec:normalized.
 			
@@ -373,7 +373,7 @@ until done {
 			set targetHeading to headingOf(aimPosHeading).
 			set controlAlt to false.
 			
-			if ship:status = "landed" set targetSpeed to 0.
+			if ship:status = "landed" { set targetSpeed to 0. brakes on. }
 			else set targetSpeed to min(stallSpeed + heightAbove/10,targetSpeed).
 		}
 		else {
@@ -386,7 +386,7 @@ until done {
 				else set clockwise to false.
 				
 				set circleRadius to landingRadius.
-				local turnCenter is pos1 - runwayVec:normalized * 4000 + sideVec:normalized * circleRadius.
+				local turnCenter is pos1 - runwayVec:normalized * (2000 + 20 * maxBankSpeed) + sideVec:normalized * circleRadius.
 				set circleLoc to body:geopositionof(turnCenter).
 				
 				set runLandingSetup to false.
