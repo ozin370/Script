@@ -1,3 +1,5 @@
+// ### AP.ks - autopilot ###
+
 @LAZYGLOBAL on.
 // autopilot
 runoncepath("lib_UI.ks").
@@ -22,7 +24,7 @@ local cam is addons:camera:flightcamera.
 	set bankHardPid to PIDLOOP(0.2, 0.01, 0.4, -90, 90).
 
 	set attackPid to PIDLOOP(3, 0.0, 10, -10, 10).
-	set pitchPid to PIDLOOP(1.5, 0.5, 2.0, -15, 15). //(1.5, 0.3, 5.0, -15, 15). //outputs extra climb angle to get the velocity climb angle corrected
+	set pitchPid to PIDLOOP(3.0, 0.1, 2.0, -10, 10). //(1.5, 0.3, 5.0, -15, 15). //outputs extra climb angle to get the velocity climb angle corrected
 	
 	
 	// set rollPid to init_roll_pid().
@@ -115,6 +117,7 @@ local cam is addons:camera:flightcamera.
 // >>
 
 
+
 set terminal:brightness to 1.
 set terminal:width to 44.
 set terminal:height to 45.
@@ -140,7 +143,7 @@ set mainMenu to list(
 	list("",			"text"),
 	list("Heading:",	"number", 	{ parameter p is sv. if p <> sv {
 										if p > 360 set p to p - 360. 
-										else if p < 0set p to 360 + p.
+										else if p < 0 set p to 360 + p.
 										set targetHeading to p.
 										set updateCam to true.
 									} 

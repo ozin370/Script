@@ -89,8 +89,6 @@ local lastMenu is activeMenu.
 //draw the menu
 function drawAll {
 	
-	//clearscreen.
-	
 	terminal:input:clear(). //clear inputs for new menus just in case..
 	set selectedLine to 0.
 	set lineType to activeMenu[selectedLine][1].
@@ -342,8 +340,8 @@ function updateLine {
 			//if not typingNumber and val:tonumber(-99.9999) <> -99.9999 and val:tonumber() > 9999 set valStr to round(val:tonumber() / 1000,1) + "K".
 			
 			set val to val + blinkStr.
-			if not typingNumber and abs(val:tonumber()) > 9999 set valStr to round(val:tonumber() / 1000,1) + "K".
-			set valStr to val.
+			if not typingNumber and abs(val:tonumber()) > 9999 set valStr to round(val:tonumber() / 1000,1) + " K".
+			else set valStr to val.
 		}
 		else if valType = "string" or valType = "display" {
 			if typingString {
@@ -394,6 +392,7 @@ function setMenu {
 	set lastMenu to activeMenu.
 	set activeMenu to menu.
 	drawAll().
+	set markerTimer to 0.
 }
 
 function boolConvert {
@@ -404,4 +403,3 @@ function boolConvert {
 }
 
 // <<
-

@@ -1,17 +1,21 @@
 local emptyString is "                                                                                                    ".
 
 function horizontalLine {
-	parameter line,char.
-	local s is emptyString:substring(0,terminal:width - 1).
+	parameter line,char,ret is false.
+	local s is emptyString:substring(0,terminal:width).
 	set s to s:replace(" ",char).
-	print s at (0,line).
+	
+	if ret return s.
+	else print s at (0,line).
 }
 
 function horizontalLineTo {
-	parameter line,colStart,colEnd,char.
-	local s is emptyString:substring(0,colEnd - colStart).
+	parameter line,colStart,colEnd,char,ret is false.
+	local s is emptyString:substring(0,colEnd - colStart + 1).
 	set s to s:replace(" ",char).
-	print s at (colStart,line).
+	
+	if ret return s.
+	else print s at (colStart,line).
 }
 function verticalLineTo {
 	parameter column,lineStart,lineEnd,char.
@@ -24,15 +28,20 @@ function verticalLineTo {
 
 // clears an entire line of the terminal
 function clearLine {
-	parameter line.
-	print emptyString:substring(0,terminal:width - 1) at (0,line).
+	parameter line,ret is false.	
+	local s is emptyString:substring(0,terminal:width).
+	
+	if ret return s.
+	else print s at (0,line).
 }
 
 // clears a line from columnStart to columnEnd
 function clearLineTo {
-	parameter line,columnStart,columnEnd.
-	local s is emptyString:substring(0,columnEnd-columnStart).
-	print s at (columnStart,line).
+	parameter line,columnStart,columnEnd,ret is false.
+	local s is emptyString:substring(0,columnEnd-columnStart + 1).
+	
+	if ret return s.
+	else print s at (columnStart,line).
 }
 
 function clearBox {

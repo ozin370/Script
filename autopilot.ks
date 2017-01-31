@@ -34,6 +34,14 @@ lock throttle to th.
 
 // ### Initual Stuff / default vars ###
 // >>
+	set m_manual to 0.
+	set m_circle to 1.
+	
+	set m_mode to m_manual.
+	set m_submode to m_manual.
+	
+	set modeString to "manual".
+	
 	set targetSpeed to round(airspeed).
 	set targetAlt to round(altitude).
 	set controlSpeed to true.
@@ -50,6 +58,7 @@ lock throttle to th.
 	set aoaLow to 15. //at low speeds
 	set bankFactor to 1.
 	set bankHard to false.
+	set circleRadius to 1000.
 	
 	set vd_stTarget to vecs_add(v(0,0,0),v(0,0,0),green,"",0.2).
 	set vd_st to vecs_add(v(0,0,0),v(0,0,0),magenta,"",0.2).
@@ -106,10 +115,13 @@ runpath("lib_menu.ks").
 
 set mainMenu to list(
 	//list("Modes",		"text"),
-	list("Speed:",		"number", 	{ parameter p is sv. if p <> sv set targetSpeed to max(0,round(p)). return targetSpeed. }, 10),
+	//list("[>] MODES",	"menu" , 	{ return modesMenu. }),
+	list("",			"text"),
+	//list("Active mode:","display",	{ return modeString. }),
 	list("-",			"line"),
+	list("Speed:",		"number", 	{ parameter p is sv. if p <> sv set targetSpeed to max(0,round(p)). return targetSpeed. }, 10),
 	list("Heading:",	"number", 	{ parameter p is sv. if p <> sv { if p > 360{set p to p - 360.} else if p < 0{set p to 360 + p.} set targetHeading to p. } return round(targetHeading,2). }, 1),
-	list("Climb:",		"number", 	{ parameter p is sv. if p <> sv set targetPitch to max(-90,min(90,p)). return round(targetPitch,1). }, 1),
+	list("Climb:",		"number", 	{ parameter p is sv. if p <> sv set targetPitch to max(-90,min(90,p)). return round(targetPitch,2). }, 1),
 	list("",			"text"),
 	list("Alt ctrl:",	"bool", 	{ parameter p is sv. if p <> sv set controlAlt to boolConvert(p). return controlAlt. }),
 	list("Altitude:",	"number", 	{ parameter p is sv. if p <> sv set targetAlt to max(0,round(p,1)). return targetAlt. }, 10),
@@ -120,6 +132,33 @@ set mainMenu to list(
 	list("[>] STEERINGMANAGER",	"menu" , 	{ return steeringMenu. }),
 	list("[>] VESSEL SETTINGS",	"menu" , 	{ return settingsMenu. }),
 	list("[X] Exit", 			"action", { set done to true. })
+).
+
+set modesMenu to list(
+	list("Manual",	"action", 	{ 
+		set m_mode to m_manual. 
+		set m_submode to m_manual.
+		set modeString to "manual".
+		set targetPitch to 0.
+		set targetHeading to round(headingOf(ship:facing:vector),2).
+		setMenu(mainMenu).
+	}),
+	list("Circle",	"action", 	{
+		set m_mode to m_circle.
+		set m_submode to m_circle.
+		set modeString to "circling".
+		set circleLoc to ship:geoposition.
+		set vecs[vd_pos]:show to true.
+		setMenu(circleModeMenu).
+	}),
+	list("-",				"line"),
+	list("[<] MAIN MENU",		"backmenu", { return mainMenu. })
+).
+
+set circleModeMenu to list(
+	list("Circle Radius:",	"number", 	{ parameter p is sv. if p <> sv set circleRadius to max(100,round(p)). return circleRadius. }, 100),
+	list("-",				"line"),
+	list("[<] MAIN MENU",		"backmenu", { return mainMenu. })
 ).
 
 set steeringMenu to list(
@@ -185,19 +224,6 @@ set pidMenu to list(
 	list("[<] BACK",		"backmenu", { return steeringMenu. })
 ).
 
-set manualMenu to list(
-	//list(name,type,get/set function,increment multiplier (for numbers)).
-	list("Main Menu > Mode: Manual",					"text"),
-	list("-",						"line"),
-	list("Speed:",		"number", 	{ parameter p is sv. if p <> sv set targetSpeed to p. return targetSpeed. }, 1),
-	list("Altitude:",	"number", 	{ parameter p is sv. if p <> sv set targetAlt to p. return targetAlt. }, 10),
-	list("",			"text"),
-	list("Throttle:",	"bool" , 	{ parameter p is sv. if p <> sv set controlSpeed to p. return controlSpeed. }),
-	list("Altitude:",	"bool" , 	{ parameter p is sv. if p <> sv set controlAlt to p. return controlAlt. }),
-	list("",			"text"),
-	list("[<] MAIN MENU",	"backmenu", { return mainMenu. })
-).
-
 set settingsMenu to list(
 	//list(name,type,get/set function,increment multiplier (for numbers)).
 
@@ -247,7 +273,7 @@ until done {
 	local vel is velocity:surface.
 	set forwardSpeed to vdot(shipfacing,vel).
 	set th to throtPid:Update(time:seconds, forwardSpeed - targetSpeed).
-	if (forwardSpeed - targetSpeed) > 5 brakes on.
+	if (forwardSpeed - targetSpeed) > 10 brakes on.
 	else brakes off.
 	
 	
@@ -256,6 +282,18 @@ until done {
 	//local hFacing is vxcl(up:vector,ship:facing:vector).
 	
 	//local shipHeading is headingOf(hVel).
+	
+	if m_submode = m_circle {
+		local centerPos is vxcl(upVec,circleLoc:position).
+		local wantedPos is centerPos - centerPos:normalized * circleRadius.
+		//set wantedPos to vcrs(upVec,centerPos):normalized * circleRadius.
+		set wantedPos:mag to wantedPos:mag^0.5.
+		local targetHeadingVec is wantedPos + vcrs(upVec,centerPos):normalized * targetSpeed.
+		set targetHeading to headingOf(targetHeadingVec).
+		
+		set vecs[vd_pos]:start to circleLoc:position.
+		print "r dist: " + round(centerPos:mag) + "m   " at (round(terminal:width*0.5),terminal:height-2).
+	}
 	
 	// ### ALT ###
 	if controlAlt {
