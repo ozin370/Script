@@ -59,6 +59,7 @@ function rescale {
 function stage_until_number {
 	parameter stage_number.
 	if stage:number > stage_number {
+		set kuniverse:timewarp:warp to 0.
 		add_entry(mission_time() + "Staging to stage " + stage_number).
 		local old_th is th.
 		set th to 0.
@@ -66,7 +67,7 @@ function stage_until_number {
 		until i = stage_number {
 			wait until stage:ready. 
 			stage.
-			wait 3.
+			if not stg_recovery wait 3.
 			set i to i - 1.
 		}
 		set th to old_th.
@@ -225,7 +226,8 @@ until done or abort {
 		set th to (target_apo - apoapsis)/1000.
 		
 		if stg_recovery and not boostback_staged and th < 0.1 { //target APO is close, stage away the first stage if it is supposed to be boosting back to LP
-			stage_until_number(stage_to_orbit). 
+			stage_until_number(stage_to_orbit).
+			wait 2.
 			boostback().
 			set boostback_staged to true.
 		} 
@@ -252,9 +254,11 @@ until done or abort {
 		runpath("exec.ks",apo_node). //program to timewarp to and execute a node
 		
 		add_entry(mission_time() + "Circularization burn complete - fine tuning...").
-		rcs on.
-		runpath("circ.ks","rcs"). //program that does the final touches on the circularization.
-		rcs off.
+		if not stg_recovery {
+			rcs on.
+			runpath("circ.ks","rcs"). //program that does the final touches on the circularization.
+			rcs off.
+		}
 		
 		add_entry(mission_time() + "Launch complete! Final AP: " + round(apoapsis,1) + ", final PE: " + round(periapsis,1) + ", INC: " + round(ship:obt:inclination,3)).
 		

@@ -5,6 +5,7 @@
 runoncepath("lib_UI.ks"). //needed for some terminal drawing functions.
 
 global list_menu is list("").
+//global lib_list_active is true.
 
 //declare some vars and default values
 local listmenu_dimensions is lexicon(
