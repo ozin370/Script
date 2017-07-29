@@ -1,3 +1,5 @@
+// ### quad.ks ###
+
 @LAZYGLOBAL on.
 clearvecdraws().
 clearscreen.
@@ -264,13 +266,25 @@ function inputs {
 			save_json(). //save settings to json file on local volume
 		}
 		else if ag2 {
-			if forceDock set forceDock to false.
-			else set forceDock to true.
+			if forceDock {
+				set forceDock to false.
+				popup("Force-dock setting disabled").
+			}
+			else {
+				set forceDock to true.
+				popup("Force-dock setting enabled").
+			}
 			console_init().
 		}
 		else if ag3 {
-			if autoFuel set autoFuel to false.
-			else set autoFuel to true.
+			if autoFuel {
+				set autoFuel to false.
+				popup("Auto-Dock on low fuel disabled").
+			}
+			else {
+				set autoFuel to true.
+				popup("Auto-Dock on low fuel enabled").
+			}
 			console_init().
 		}
 		else if ag4 {
@@ -279,8 +293,14 @@ function inputs {
 			console_init().
 		}
 		else if ag5 {
-			if agressiveChase set agressiveChase to false.
-			else set agressiveChase to true.
+			if agressiveChase {
+				set agressiveChase to false.
+				popup("Match acceleration setting disabled").
+			}
+			else {
+				set agressiveChase to true.
+				popup("Match acceleration setting enabled").
+			}
 			console_init().
 		}
 		else if ag6 {
@@ -317,7 +337,7 @@ function inputs {
 			ag1 off.
 			set page to 2.
 			console_init().
-		}
+		} 
 		else if ag10 { // EXIT
 			set exit to true.
 		}
@@ -414,6 +434,7 @@ function inputs {
 			if hasCamAddon {
 				set camMode to camMode + 1.
 				if camMode = 3 set camMode to 0.
+				else if camMode = 2 and not(mode = m_race) set camMode to 0.
 				set extcam:camerafov to 70.
 				set extcam:cameradistance to 10.
 			}
@@ -427,7 +448,7 @@ function inputs {
 				set submode to m_hover.
 				set modeChanged to true.
 				set vecs[markDestination]:show to false.
-				popup("Canceling velocity").
+				popup("Hover mode").
 			}
 			else if ag3 { //landing
 				set mode to m_free.
@@ -439,6 +460,7 @@ function inputs {
 				set targetGeoPos to ship:geoposition.
 				set vecs[markDestination]:show to false.
 				popup("Landing").
+				entry("Landing..").
 			}
 			else if ag4 { //free
 				set mode to m_free.
@@ -529,9 +551,14 @@ function inputs {
 				set modeChanged to true.
 				set mode to m_race.
 				set submode to m_pos.
-				set gravitymod to 0.8. //.90 
-				set thrustmod to 0.75. //.50
+				set gravitymod to 1.2. //.80
+				set thrustmod to 0.95. //.75
+				set PID_pitch:kp to 100. 
+				set PID_roll:kp to 100.
+				set climbDampening to 0.3.
 				setLights(1,0.5,0).
+				popup("Race mode started").
+				entry("Race started").
 				
 				listGates().
 				nextGate().
@@ -544,7 +571,7 @@ function inputs {
 				
 				toggleVelVec(). 
 			}
-			if modeChanged { //stuff that needs doing after mode change
+			if modeChanged { //stuff that needs doing after mode change 
 				if mode <> m_free {
 					set doLanding to false.
 					if not(stMark) {
@@ -554,14 +581,21 @@ function inputs {
 				}
 				
 				if not(mode = m_race) {
-					set gravitymod to 1.3.
+					set gravitymod to 1.2.
 					set thrustmod to 0.92.
+					set PID_pitch:kp to 75. 
+					set PID_roll:kp to 75.
+					set climbDampening to 0.15.
 					set vecs[markGate]:show to false.
 					setLights(0,1,0).
 					
-					set PID_hAcc to pidloop(1.2 * ipuMod,0,0.1 + 1 - weightRatio,0,90).  
+					set PID_hAcc to pidloop(1.6 * ipuMod,0,0.2 + 1 - weightRatio,0,90).
+					set ang_vel_exponential to 0.5.
 				} 
-				else set PID_hAcc to pidloop(1.6 * ipuMod,0,0.1,0,90). //2.1  0.4  
+				else { 
+					set PID_hAcc to pidloop(1.6 * ipuMod,0,0.1,0,90). //2.1  0.4 
+					set ang_vel_exponential to 0.75.
+				}
 				console_init().
 			}
 		}
@@ -594,9 +628,10 @@ function getInertia { //moment of inertia around an axis
 set roll_inertia to getInertia(facing:topvector).
 set pitch_inertia to getInertia(facing:starvector).
 
+set shipFacing to ship:facing:vector.
 function getTorque {
 	parameter p. 
-	return vxcl(ship:facing:vector,p:position):mag * (p:maxthrust * vdot(ship:facing:vector,p:facing:vector)).
+	return vxcl(shipFacing,p:position):mag * (p:maxthrust * vdot(shipFacing,p:facing:vector)).
 }
 set pitch_torque to (getTorque(eng_pitch_pos["part"]) + getTorque(eng_pitch_neg["part"])) / 2.
 set roll_torque to (getTorque(eng_roll_pos["part"]) + getTorque(eng_roll_neg["part"])) / 2.
@@ -637,12 +672,12 @@ list targets in targs.
 set target_i to 0.
 set tarPart to 0.
 set adjustedMass to mass.
-set localTWR to (MaxShipThrust() / adjustedMass)/(body:mu / body:position:mag^2).
-set TWR to (MaxShipThrust() / adjustedMass)/9.81.
+set localTWR to (ship:maxthrustat(1) / adjustedMass)/(body:mu / body:position:mag^2).
+set TWR to (ship:maxthrustat(1) / adjustedMass)/9.81.
 set v_acc_e_old to 0.
 set h_acc_e_old to v(0,0,0).
 local tOld is time:seconds. local velold is velocity:surface. local dT is 1. local tarVelOld is v(0,0,0).
-global tHeight is round(min(50,alt:radar + 4),2).
+global tHeight is round(min(10,alt:radar + 4),2).
 global th is 0.
 local posI is 0.
 local accI is 0.
@@ -678,16 +713,23 @@ set focusPos to facing:topvector * 10.
 set focusCamPos to facing:topvector * 1.
 set vMod to 0.
 set fuel to 100.
-set gravitymod to 1.0.
-set thrustmod to 1.0.
+set gravitymod to 1.2.
+set thrustmod to 0.92.
 set h_vel to v(0,0,0).
 set isDocked to false.
 set hasWinch to false.
-set ipuMod to sqrt(config:ipu/2000). //used to slow things down if low IPU setting 
+set ipuMod to sqrt(min(2000,config:ipu)/2000). //used to slow things down if low IPU setting 
 set camMode to 0.
 set destinationLabel to "".
 set lastCamActivation to 0.
 set showstats to false.
+set ang_vel_exponential to 0.5.
+local doFlip is false.
+set dTavg to 0.02. 
+set climbDampening to 0.5.
+local terrainChecks is 5.
+set availableTWR to ship:maxthrustat(1) / ship:mass.
+set engineThrustLimitList to list(0,0,0,0). 
 
 
 if hasMS {
@@ -706,28 +748,56 @@ if canReverse {
 	global PID_roll is P_init(100.0,-200,200).  
 }
 else {
-	global PID_pitch is pidloop(75, 0, 2, -100, 100). //(75, 0, 2, -100, 100).    
-	//global PID_pitch is P_init(50.0,-100,100). //P_init(50.0,-100,100).       
-	global PID_roll is pidloop(75, 0, 2, -100, 100). //(75, 0, 2, -100, 100).    
-	//global PID_roll is P_init(50.0,-100,100). //P_init(50.0,-100,100).  
+	global PID_pitch is pidloop(75, 0, 2, -100, 100). //(75, 0, 2, -100, 100). 
+	//global PID_pitch is P_init(50.0,-100,100). //P_init(50.0,-100,100). 
+	global PID_roll is pidloop(75, 0, 2, -100, 100). //(75, 0, 2, -100, 100).
+	//global PID_roll is P_init(50.0,-100,100). //P_init(50.0,-100,100).
 }
 
-global PID_vAcc is pidloop(4,0,0.5,-90,90). //pidloop(8,0,0.5,-90,90).   
+global PID_vAcc is pidloop(6,0,0.3,-90,90). //pidloop(8,0,0.5,-90,90).   
 set PID_vAcc:setpoint to 0.
 
 //global PID_hAcc is pidloop(2.1,0,0.1,0,90).   //(3,0,0.3,0,90).     
-global PID_hAcc is pidloop(1.4 * ipuMod,0,0.1,0,90). 
-
+global PID_hAcc is pidloop(1.4 * ipuMod,0.2,0.1,0,90).  
 set PID_hAcc:setpoint to 0.
+
+//horizontal speed to destination PID
+//global PID_hVel is pidloop(1,0,0,0,200).
+//set PID_hVel:setpoint to 0.
 //<<
 
-//runpath("quad_loop.ksm").
 local filename is "0:vessels/" + ship:name + ".json".
 if exists(filename) load_json(). //load saved settings on the local drive, if any.  
 set all_libs_loaded to true.
 backlog:add("All systems ready. Initializing controllers.").
 console_init().
 
+when camMode > 0 then {
+	if camMode = 1 and h_vel_mag > 0.1 { //chase cam mode
+		
+		set desiredHV_capped to desiredHV:normalized * min(shipVelocitySurface:mag,desiredHV:mag).
+		set focusCamPos to focusCamPos + shipVelocitySurface * 0.05 + desiredHV_capped * 0.05. 
+		set focusCamPos:mag to max(10,shipVelocitySurface:mag).
+		
+		set extcam:position to angleaxis(8,vcrs(upVector,focusCamPos)) * -focusCamPos.
+		set extcam:cameradistance to 8 + 6 * (h_vel_mag/100).
+
+	}
+	else if camMode = 2 {
+		local focusCamPos is (targetGate:position + upVector * 20 - gateFacing * (80 + targetGate:position:mag * 0.3)). 
+		
+		set extcam:camerafov to arctan(15/(focusCamPos:mag^0.7)). 
+		set extcam:position to focusCamPos.
+	}
+	return true.
+}
+
+// #####################################################
+// ### Code that needs to be run each tick, at the start
+when KUniverse:activevessel = ship then {
+	if focused inputs(). //check for user input 
+	return true.
+}
 //main controller loop
 set exit to false.
 set lockToggle to false.

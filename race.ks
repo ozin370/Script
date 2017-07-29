@@ -84,7 +84,7 @@ function nextGate {
 	set gateSpeed to max(25,min(340,gateSpeed)). 
 	//global gateSpeed is (nextSideDist^0.8) * (1 + (TWR - 4)/8) * 2. 
 	entry("Gate Speed Limit:  " + round(gateSpeed) + " m/s").
-	popup("Gate Speed Limit:  " + round(gateSpeed) + " m/s").
+	//popup("Gate Speed Limit:  " + round(gateSpeed) + " m/s").
 	set destinationLabel to targetString.
 	
 	
@@ -93,9 +93,9 @@ function nextGate {
 
 function detectIntersect {
 	local result is false.
-	local gatePos is targetGate:position.
-	if gatePos:mag < 30 {
-		if vdot(h_vel:normalized,gatePos) < 2 {
+
+	if gateDist < 10 {
+		if vdot(h_vel:normalized,gateDistVec) < 2 {
 			
 			if vdot(-sideVec,gateRight:position) > 0 and vdot(sideVec,gateLeft:position) > 0 {
 				set result to true.

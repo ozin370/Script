@@ -150,7 +150,6 @@ function toggleVelVec {
 		
 		set vecs[markHorV]:show to stMark.
 		set vecs[markDesired]:show to stMark.
-		popup("Velocity and target velocity vector display toggled").
 	}
 }
 function toggleThrVec {
@@ -162,7 +161,7 @@ function toggleThrVec {
 		set vecs[i]:show to thMark.
 		set i to i + 1.
 	}
-	popup("Thrust balance vector display toggled").
+	
 	//set vecs[markThrustAcc]:show to true.
 }
 function toggleAccVec {
@@ -170,31 +169,31 @@ function toggleAccVec {
 	else set miscMark to true.
 	set vecs[markTar]:show to miscMark.
 	//set vecs[markAcc]:show to miscMark.
-	
-	popup("Steering and acceleration vector display toggled").
 }
 
+
+
+//new
+local emptyString is "                                                                                                    ".
 function horizontalLine {
-	parameter line,char.
-	local i is 0.
-	local s is "".
-	until i = terminal:width {
-		set s to char + s.
-		set i to i + 1.
-	}
-	if line < 0 print s. //print to next line
+	parameter line,char,ret is false.
+	local s is emptyString:substring(0,terminal:width).
+	set s to s:replace(" ",char).
+	
+	if ret return s.
 	else print s at (0,line).
 }
+
 function horizontalLineTo {
-	parameter line,colStart,colEnd,char.
-	local column is colStart.
-	local s is "".
-	until column > colEnd {
-		set s to char + s.
-		set column to column + 1.
-	}
-	print s at (colStart,line).
+	parameter line,colStart,colEnd,char,ret is false.
+	local s is emptyString:substring(0,colEnd - colStart + 1).
+	set s to s:replace(" ",char).
+	
+	if ret return s.
+	else print s at (colStart,line).
 }
+
+
 function verticalLineTo {
 	parameter column,lineStart,lineEnd,char.
 	local line is lineStart.
@@ -230,7 +229,7 @@ function clearLine {
 }
 function popup {
 	parameter s.
-	HUDTEXT(s, 5, 2, 60, yellow, false).
+	HUDTEXT(s, 5, 2, 40, yellow, false).
 	if addons:available("tts") addons:tts:say(s).
 	
 	// context: HUDTEXT( Message, delaySeconds, style, size, colour, boolean doEcho).
@@ -238,7 +237,7 @@ function popup {
 }
 function warning {
 	parameter s.
-	HUDTEXT(s, 5, 2, 70, red, false).
+	HUDTEXT(s, 5, 2, 60, red, false).
 	if addons:available("tts") addons:tts:say("Warning!" + s).
 	
 	// context: HUDTEXT( Message, delaySeconds, style, size, colour, boolean doEcho).
@@ -285,11 +284,13 @@ function console_init {
 		global c3 is 42.
 		global rd1 is 6.
 		global rd2 is rd1 + 13.
-		global bd is rd2 + 11.
+		if mode = m_race set bd to 1.
+		else set bd to rd2 + 11.
 		
 		set terminal:width to 51.
 		//set terminal:height to max(terminal:height,40).
-		set terminal:height to max(terminal:height, bd + 2 + 6). //6+ lines for backlog
+		//set terminal:height to max(terminal:height, bd + 2 + 6). //6+ lines for backlog
+		set terminal:height to bd + 2 + 6.
 		clearscreen.
 		
 		console_backlog().
@@ -301,129 +302,130 @@ function console_init {
 		print "at " at (terminal:width-9,0).
 		horizontalLine(1,"_").
 		//left
-		if page = 1 {
-			
-			print "  1 - Options" at (0,3).
-			print "  2 - Hover " at (0,4).
-			print "  3 - Land " at (0,5).
-			print "  4 - Freeroam " at (0,6).
-			print "  5 - Go to bookmark " at (0,7).
-			print "  6 - Go to position  " at (0,8).
-			print "  7 - Chase vessel " at (0,9).
-			print "  8 - Patrol area" at (0,10).
-			print "  9 - Racing course" at (0,11).
-			print "  0 - Exit " at (0,12).
-			if mode = m_free and doLanding local modeMarker is m_free - 1.
-			else local modeMarker is mode.
-			if mode < 11 {
-				print "->" at (0,2 + modeMarker).
-				print "<-" at (c2-5,2 + modeMarker).
-			}
-
-		}
-		else {
-			if showstats {
-				print " 6 - Back " at (0,3).
-				print " MoI pitch: " + round(pitch_inertia,3) at (0,6).
-				print " MoI roll:  " + round(roll_inertia,3) at (0,7).
-				print " T pitch: " + round(pitch_torque,1) at (0,9).
-				print " T roll:  " + round(roll_torque,1) at (0,10).
-				print " Acc pitch: " + round(pitch_acc,3) + " (" + round((pitch_torque*throttle)/pitch_inertia,3) at (0,12).
-				print " Acc roll:  " + round(roll_acc,3) at (0,13).
+		if mode <> m_race {
+			if page = 1 {
 				
-				print " Speedlimit: " at (0,15).
+				print "  1 - Options" at (0,3).
+				print "  2 - Hover " at (0,4).
+				print "  3 - Land " at (0,5).
+				print "  4 - Freeroam " at (0,6).
+				print "  5 - Go to bookmark " at (0,7).
+				print "  6 - Go to position  " at (0,8).
+				print "  7 - Chase vessel " at (0,9).
+				print "  8 - Patrol area" at (0,10).
+				print "  9 - Racing course" at (0,11).
+				print "  0 - Exit " at (0,12).
+				if mode = m_free and doLanding local modeMarker is m_free - 1.
+				else local modeMarker is mode.
+				if mode < 11 {
+					print "->" at (0,2 + modeMarker).
+					print "<-" at (c2-5,2 + modeMarker).
+				}
+
 			}
 			else {
-				print "  1 - Run Modes" at (0,3).
-				print "  2 - Force Dock" at (0,4).
-				print "  3 - Auto Refuel" at (0,5).
-				print "  4 - Auto land" at (0,6).
-				print "  5 - Agressive Chase" at (0,7).
-				print "  6 - Vessel Stats" at (0,8).
-				print "  7 - Terrain Prediction" at (0,9).
-				print "  8 - Steering Display" at (0,10).
-				print "  9 - Thrust Display" at (0,11).
-				print "  0 - Misc Display" at (0,12).
-				if mode > 10 and mode < 21 {
-					print "->" at (0,2 + mode - 10).
-					print "<-" at (c2-5,2 + mode - 10).
-				}
-				local char is "X".
-				if forceDock print char at (4,4).
-				if autoFuel print char at (4,5).
-				if autoLand print char at (4,6).
-				if agressiveChase print char at (4,7).
-				
-				if terMark print char at (4,9).
-				if stMark print char at (4,10).
-				if thMark print char at (4,11).
-				if miscMark print char at (4,12).
-			}
-			
-		}
-
-		
-		
-		if all_libs_loaded { 
-			if not(showstats) {
-				if mode = m_hover print "Maintaining height." at (1,ld1 + 2).
-				else if mode = m_land print "Landing." at (1,ld1 + 2).
-				else if mode = m_free { 
-					print "[WASD to steer]" at (1,ld1 + 2).
-					print "Heading: " at (1,ld1 + 4). 
-					print "Speedlimit:" at (1,ld1 + 6). 
-				}
-				else if mode = m_race {
-					print "RACE ON!" at (1,ld1 + 2).
+				if showstats {
+					print " 6 - Back " at (0,3).
+					print " MoI pitch: " + round(pitch_inertia,3) at (0,6).
+					print " MoI roll:  " + round(roll_inertia,3) at (0,7).
+					print " T pitch: " + round(pitch_torque,1) at (0,9).
+					print " T roll:  " + round(roll_torque,1) at (0,10).
+					print " Acc pitch: " + round(pitch_acc,3) + " (" + round((pitch_torque*throttle)/pitch_inertia,3) at (0,12).
+					print " Acc roll:  " + round(roll_acc,3) at (0,13).
+					
+					print " Speedlimit: " at (0,15).
 				}
 				else {
-					if submode = m_follow {
-						print "Chasing vessel:" at (1,ld1 + 2).
-						print tarVeh:name at (1,ld1 + 4).
-						if tarVeh:loaded { print tarPart:name at (1,ld1 + 5). } 
+					print "  1 - Run Modes" at (0,3).
+					print "  2 - Force Dock" at (0,4).
+					print "  3 - Auto Refuel" at (0,5).
+					print "  4 - Auto land" at (0,6).
+					print "  5 - Agressive Chase" at (0,7).
+					print "  6 - Vessel Stats" at (0,8).
+					print "  7 - Terrain Prediction" at (0,9).
+					print "  8 - Steering Display" at (0,10).
+					print "  9 - Thrust Display" at (0,11).
+					print "  0 - Misc Display" at (0,12).
+					if mode > 10 and mode < 21 {
+						print "->" at (0,2 + mode - 10).
+						print "<-" at (c2-5,2 + mode - 10).
 					}
-					else if mode = m_patrol print "Patrolling area. [WASD]" at (1,ld1 + 2).
-					else {
-						print "Going to destination." at (1,ld1 + 2).
-						print "Pos: " + destinationLabel at (1,ld1 + 4). 
-					}
-					print "Distance:" at (1,ld1 + 7).
-					print "Height D:" at (1,ld1 + 8).
-					print "LAT:" at (1,ld1 + 10).
-					print "LNG:" at (11,ld1 + 10).
-					print "Heading:" at (1,ld1 + 11).
+					local char is "X".
+					if forceDock print char at (4,4).
+					if autoFuel print char at (4,5).
+					if autoLand print char at (4,6).
+					if agressiveChase print char at (4,7).
+					
+					if terMark print char at (4,9).
+					if stMark print char at (4,10).
+					if thMark print char at (4,11).
+					if miscMark print char at (4,12).
 				}
-			
-			
-			
-			
-				//right
 				
-				print "Hover Height:" at (c2,3).
-				
-				print "Velocity limit:" at (c2,5).
-				
-				
-				print "--------[STATS]---------" at (c2,rd1 + 3).
-				print "FUEL |                 |" at (c2,rd1 + 5).
-				print "TWR (local):" at (c2,rd1 + 7).
-				
-				print "Drone Mass:" at (c2,rd1 + 9).
-				print "Payload:" at (c2,rd1 + 10).
-				
-				print "--------[FLIGHT]--------" at (c2, rd2).
-				print "  Vertical V:" at (c2,rd2 + 2).
-				print "Horizontal V:" at (c2,rd2 + 3).
-				print "Radar height:" at (c2,rd2 + 5).
-				print "Height error:" at (c2,rd2 + 6).
-				
-				horizontalLineTo(ld1,0,22,"-").
-				horizontalLineTo(rd1,c2-1,terminal:width-1,"_").
-				verticalLineTo(c2-3,2,bd-1,"||").
 			}
+
+			
+			
+			if all_libs_loaded { 
+				if not(showstats) {
+					if mode = m_hover print "Maintaining height." at (1,ld1 + 2).
+					else if mode = m_land print "Landing." at (1,ld1 + 2).
+					else if mode = m_free { 
+						print "[WASD to steer]" at (1,ld1 + 2).
+						print "Heading: " at (1,ld1 + 4). 
+						print "Speedlimit:" at (1,ld1 + 6). 
+					}
+					else if mode = m_race {
+						print "RACE ON!" at (1,ld1 + 2).
+					}
+					else {
+						if submode = m_follow {
+							print "Chasing vessel:" at (1,ld1 + 2).
+							print tarVeh:name at (1,ld1 + 4).
+							if tarVeh:loaded { print tarPart:name at (1,ld1 + 5). } 
+						}
+						else if mode = m_patrol print "Patrolling area. [WASD]" at (1,ld1 + 2).
+						else {
+							print "Going to destination." at (1,ld1 + 2).
+							print "Pos: " + destinationLabel at (1,ld1 + 4). 
+						}
+						print "Distance:" at (1,ld1 + 7).
+						print "Height D:" at (1,ld1 + 8).
+						print "LAT:" at (1,ld1 + 10).
+						print "LNG:" at (11,ld1 + 10).
+						print "Heading:" at (1,ld1 + 11).
+					}
+				
+				
+				
+				
+					//right
+					
+					print "Hover Height:" at (c2,3).
+					
+					print "Velocity limit:" at (c2,5).
+					
+					
+					print "--------[STATS]---------" at (c2,rd1 + 3).
+					print "FUEL |                 |" at (c2,rd1 + 5).
+					print "TWR (local):" at (c2,rd1 + 7).
+					
+					print "Drone Mass:" at (c2,rd1 + 9).
+					print "Payload:" at (c2,rd1 + 10).
+					
+					print "--------[FLIGHT]--------" at (c2, rd2).
+					print "  Vertical V:" at (c2,rd2 + 2).
+					print "Horizontal V:" at (c2,rd2 + 3).
+					print "Radar height:" at (c2,rd2 + 5).
+					print "Height error:" at (c2,rd2 + 6).
+					
+					horizontalLineTo(ld1,0,22,"-").
+					horizontalLineTo(rd1,c2-1,terminal:width-1,"_").
+					verticalLineTo(c2-3,2,bd-1,"||").
+				}
+			}
+			else print "Configuring stuff.." at (1,ld1 + 2).
 		}
-		else print "Configuring stuff.." at (1,ld1 + 2).
-		
 		
 		horizontalLine(bd,"=").
 	}
@@ -464,24 +466,6 @@ if vecs:length > 0 vecs_clear().
 
 ////////////////////////////////////////////////////////// 
 
-function MaxShipThrust
-{
-    local mth to 0.
-    for eng in engs {
-		set mth to mth + eng:MAXTHRUST* (eng:ISP/eng:VISP).
-    }
-    return mth.
-}
-function availableShipThrust
-{
-    local ath to 0.
-    for eng in engs {
-		//set ath to ath + vdot(ship:facing:vector,eng:facing:vector * eng:AVAILABLETHRUST). 
-		set ath to ath + eng:AVAILABLETHRUST.
-    }
-    return ath.
-}
-
 function nz { //"not zero" , NaN protection
 	parameter float.
 	if abs(float) < 0.001 {
@@ -495,183 +479,4 @@ function toRad {
 	return n * ( constant:pi / 180).
 }
 
-///////////////////////// ksLIB team's PID controller ////////////////////////////
-// This file is distributed under the terms of the MIT license, (c) the KSLib team
 
-
-
-function PID_init {
-  parameter
-    Kp,      // gain of position
-    Ki,      // gain of integral
-    Kd,      // gain of derivative
-    cMin,  // the bottom limit of the control range (to protect against integral windup)
-    cMax.  // the the upper limit of the control range (to protect against integral windup)
-
-  local SeekP is 0. // desired value for P (will get set later).
-  local P is 0.     // phenomenon P being affected.
-  local I is 0.     // crude approximation of Integral of P.
-  local D is 0.     // crude approximation of Derivative of P.
-  local oldT is -1. // (old time) start value flags the fact that it hasn't been calculated
-  local oldInput is 0. // previous return value of PID controller.
-
-  // Because we don't have proper user structures in kOS (yet?)
-  // I'll store the PID tracking values in a list like so:
-  //
-  local PID_array is list(Kp, Ki, Kd, cMin, cMax, SeekP, P, I, D, oldT, oldInput).
-
-  return PID_array.
-}.
-
-function PID_seek {
-  parameter
-    PID_array, // array built with PID_init.
-    seekVal,   // value we want.
-    curVal.    // value we currently have.
-
-  // Using LIST() as a poor-man's struct.
-
-  local Kp   is PID_array[0].
-  local Ki   is PID_array[1].
-  local Kd   is PID_array[2].
-  local cMin is PID_array[3].
-  local cMax is PID_array[4].
-  local oldS   is PID_array[5].
-  local oldP   is PID_array[6].
-  local oldI   is PID_array[7].
-  local oldD   is PID_array[8].
-  local oldT   is PID_array[9]. // Old Time
-  local oldInput is PID_array[10]. // prev return value, just in case we have to do nothing and return it again.
-
-  local P is seekVal - curVal.
-  local D is oldD. // default if we do no work this time.
-  local I is oldI. // default if we do no work this time.
-  local newInput is oldInput. // default if we do no work this time.
-
-  local t is time:seconds.
-  local dT is t - oldT.
-
-  if oldT < 0 {
-    // I have never been called yet - so don't trust any
-    // of the settings yet.
-  } else {
-    if dT > 0 { // Do nothing if no physics tick has passed from prev call to now.
-     set D to (P - oldP)/dT. // crude fake derivative of P
-     local onlyPD is Kp*P + Kd*D.
-     if (oldI > 0 or onlyPD > cMin) and (oldI < 0 or onlyPD < cMax) { // only do the I turm when within the control range
-      set I to oldI + P*dT. // crude fake integral of P
-     }.
-     set newInput to onlyPD + Ki*I.
-    }.
-  }.
-
-  set newInput to max(cMin,min(cMax,newInput)).
-
-  // remember old values for next time.
-  set PID_array[5] to seekVal.
-  set PID_array[6] to P.
-  set PID_array[7] to I.
-  set PID_array[8] to D.
-  set PID_array[9] to t.
-  set PID_array[10] to newInput.
-
-  return newInput.
-}.
-
-//
-
-function PD_init {
-  parameter
-    Kp,      // gain of position
-    Kd,      // gain of derivative
-    cMin,  // the bottom limit of the control range (to protect against integral windup)
-    cMax.  // the the upper limit of the control range (to protect against integral windup)
-
-  local SeekP is 0. // desired value for P (will get set later).
-  local P is 0.     // phenomenon P being affected.
-  local D is 0.     // crude approximation of Derivative of P.
-  local oldT is -1. // (old time) start value flags the fact that it hasn't been calculated
-  local oldInput is 0. // previous return value of PID controller.
-
-  // Because we don't have proper user structures in kOS (yet?)
-  // I'll store the PID tracking values in a list like so:
-  //
-  local PD_array is list(Kp, Kd, cMin, cMax, SeekP, P, D, oldT, oldInput).
-
-  return PD_array.
-}.
-
-function PD_seek {
-  parameter
-    PID_array, // array built with PID_init.
-    seekVal,   // value we want.
-    curVal.    // value we currently have.
-
-  // Using LIST() as a poor-man's struct.
-
-  local Kp   is PID_array[0].
-  local Kd   is PID_array[1].
-  local cMin is PID_array[2].
-  local cMax is PID_array[3].
-  local oldS   is PID_array[4].
-  local oldP   is PID_array[5].
-  local oldD   is PID_array[6].
-  local oldT   is PID_array[7]. // Old Time
-  local oldInput is PID_array[8]. // prev return value, just in case we have to do nothing and return it again.
-
-  local P is seekVal - curVal.
-  local D is oldD. // default if we do no work this time.
-  local newInput is oldInput. // default if we do no work this time.
-
-  local t is time:seconds.
-  local dT is t - oldT.
-
-  if oldT < 0 {
-    // I have never been called yet - so don't trust any
-    // of the settings yet.
-  } else {
-    if dT > 0 { // Do nothing if no physics tick has passed from prev call to now.
-     set D to (P - oldP)/dT. // crude fake derivative of P
-     set newInput to Kp*P + Kd*D.
-    }.
-  }.
-
-  set newInput to max(cMin,min(cMax,newInput)).
-
-  // remember old values for next time.
-  set PID_array[4] to seekVal.
-  set PID_array[5] to P.
-  set PID_array[6] to D.
-  set PID_array[7] to t.
-  set PID_array[8] to newInput.
-
-  return newInput.
-}.
-
-//
-
-function P_init {
-	parameter
-	Kp,      // gain of position
-	cMin,  // the bottom limit of the control range (to protect against integral windup)
-	cMax.  // the the upper limit of the control range (to protect against integral windup)
-
-	local PD_array is list(Kp, cMin, cMax).
-	return PD_array.
-}.
-
-function P_seek {
-	parameter
-	PID_array, // array built with PID_init.
-	seekVal,   // value we want.
-	curVal.    // value we currently have.
-
-	local Kp   is PID_array[0].
-	local cMin is PID_array[1].
-	local cMax is PID_array[2].
-
-	local P is seekVal - curVal.
-	return max(cMin,min(cMax,Kp*P)).
-}.
-
-print "library loaded.".
