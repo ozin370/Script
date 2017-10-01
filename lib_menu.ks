@@ -131,6 +131,7 @@ function refreshAll { //updates all values of the current menu in the terminal
 }
 
 local markerStr is ">> ".
+local suffixString is "".
 local markerTimer is time:seconds + 900000.
 function drawMarker {
 	print markerStr at (C1-3,startLine + selectedLine). //print the arrow that displays the active selection
