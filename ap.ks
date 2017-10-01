@@ -34,7 +34,7 @@ lock throttle to th.
 	set throtPid to PIDLOOP(0.1, 0.011, 0.15, 0, 1).
 	
 	set climbPid to PIDLOOP(0.4, 0.0, 0.05, -30, 35).
-	set circlePid to PIDLOOP(0.000, 0.000, 0.05, 0, 1).
+	set circlePid to PIDLOOP(0.1, 0.000, 0.01, 0, 1).
 	
 	set wheelPid to PIDLOOP(0.15, 0.000, 0.1, -1, 1).
 	
@@ -53,6 +53,8 @@ lock throttle to th.
 	
 	local mode is m_manual.
 	local submode is m_manual.
+	
+	
 	
 	local modeString is "manual".
 	local upVec is up:vector.
@@ -86,11 +88,33 @@ lock throttle to th.
 	local maxClimbAngle is 20.
 	if ship:status = "Landed" or ship:status = "PRELAUNCH" set heightOffset to round(alt:radar,2).
 	
+	//terrain checks:
+	local terrainDetection is true.
+	local totalTime is 30. 
+	local steps is 10.
+	local timeIncrement is totalTime / steps.
+	local heightMargin is 50.
+	local dT is 0.02.
+	local velLast is velocity:surface.
+	local accLast is v(0,0,0.1).
+	local oldTime is time:seconds - 0.02.
+	local lastTerrainClimb is 0.
+	
 	local vd_stTarget is vecs_add(v(0,0,0),v(0,0,0),green,"",0.2).
 	local vd_st is vecs_add(v(0,0,0),v(0,0,0),magenta,"",0.2).
 	local vd_facing is vecs_add(v(0,0,0),v(0,0,0),rgba(1,0,1,0.2),"",0.2).
 	local vd_vel is vecs_add(v(0,0,0),velocity:surface,yellow,"",0.2).
 	local vd_roll is vecs_add(v(0,0,0),v(0,0,0),cyan,"",0.2).
+	set vd_terrainlist to list().
+	
+	function createTerrainVecdraws {
+		for vd in vd_terrainlist { set vd:show to false. }
+		set vd_terrainlist to list().
+		for i in range(steps) {
+			vd_terrainlist:add(vecdraw(v(0,0,0),v(0,0,0),rgba(1,0.5,0,0.5),"",1,true,1)).
+		}
+	}
+	createTerrainVecdraws().
 	
 	local vd_pos is vecs_add(v(0,0,0),up:vector * 1000,yellow,"",10).
 	set vecs[vd_pos]:show to false.
@@ -134,16 +158,16 @@ lock throttle to th.
 	
 	
 	local runways is list().
-	runways:add(list("KSC E->W", 
-		LATLNG(-0.0502131096942382, -74.4951289901873), LATLNG(-0.0486697432694389, -74.7220377114077), // <- the first two geolocations in the list make up the runway. The plane will land close to the first one facing the second, and will take off facing the same way as well.
+	runways:add(list("KSC 09", 
+		LATLNG(-0.0486697432694389, -74.7220377114077), LATLNG(-0.0502131096942382, -74.4951289901873), // <- the first two geolocations in the list make up the runway. The plane will land close to the first one facing the second, and will take off facing the same way as well.
 		LATLNG(-0.0633901920593838,-74.6177340872895), LATLNG(-0.0667142201078598,-74.6245921697804),LATLNG(-0.0574241046721476,-74.6304580442504))). // <- taxi/parking waypoints. as many waypoints as you want, the last one being the parking spot
-	runways:add(list("KSC W->E", 
-		LATLNG(-0.0486697432694389, -74.7220377114077), LATLNG(-0.0502131096942382, -74.4951289901873),
-		LATLNG(-0.0633901920593838,-74.6177340872895), LATLNG(-0.0667142201078598,-74.6245921697804),LATLNG(-0.0574241046721476,-74.6304580442504))).
-	runways:add(list("Island W->E", 
+	runways:add(list("KSC 27", 
+		LATLNG(-0.0502131096942382, -74.4951289901873), LATLNG(-0.0486697432694389, -74.7220377114077), 
+		LATLNG(-0.0633901920593838,-74.6177340872895), LATLNG(-0.0667142201078598,-74.6245921697804),LATLNG(-0.0574241046721476,-74.6304580442504))). 
+	runways:add(list("Island 09", 
 		LATLNG(-1.51806713434498,-71.9686515236803), LATLNG(-1.51566431260178,-71.8513882426904),
 		LATLNG(-1.52246003880166,-71.8951322255196), LATLNG(-1.52238917854372,-71.9029429161532))).
-	runways:add(list("Island E->W", 
+	runways:add(list("Island 27", 
 		LATLNG(-1.51566431260178,-71.8513882426904), LATLNG(-1.51806713434498,-71.9686515236803),
 		LATLNG(-1.52246003880166,-71.8951322255196), LATLNG(-1.52238917854372,-71.9029429161532))).
 	runways:add(list("Island Roof", 
@@ -226,6 +250,9 @@ set mainMenu to list(
 	list("",				"text"),
 	list("Altitude control:","bool", 	{ parameter p is sv. if p <> sv set controlAlt to boolConvert(p). return controlAlt. }),
 	list("Altitude target:","number", { parameter p is sv. if p <> sv set targetAlt to max(0,round(p,1)). return round(targetAlt,1). }, 10),
+	list("-",			"line"),
+	list("Terrain detection:","bool", 	{ parameter p is sv. if p <> sv set terrainDetection to boolConvert(p). return terrainDetection. }),
+	list("[>] Detection settings","menu" , 	{ return terrainMenu. }),
 	
 	//list("Bank Hard:",	"bool", 	{ parameter p is sv. if p <> sv set bankHard to boolConvert(p). return bankHard. }),
 	
@@ -396,6 +423,18 @@ set settingsMenu to list(
 	list("[<] MAIN MENU",	"backmenu", { return mainMenu. })
 ).
 
+set terrainMenu to list(
+	//list(name,type,get/set function,increment multiplier (for numbers)).
+	list("Terrain Detection","text"),
+	list("Enabled:",		"bool", 	{ parameter p is sv. if p <> sv set terrainDetection to boolConvert(p). return terrainDetection. }),
+	list("Minimum Radar-Alt:",	"number", 	{ parameter p is sv. if p <> sv set heightMargin to max(10,round(p)). return heightMargin. }, 10),
+	list("",				"text"),
+	list("Prediction Length:",	"number", 	{ parameter p is sv. if p <> sv { set totalTime to max(3,round(p)). set timeIncrement to totalTime / steps. } return totalTime. }, 10),
+	list("Prediction Steps:",	"number", 	{ parameter p is sv. if p <> sv { set steps to max(1,round(p)). set timeIncrement to totalTime / steps. createTerrainVecdraws(). } return steps. }, 1),
+	list("-",				"line"),
+	list("[<] MAIN MENU",	"backmenu", { return mainMenu. })
+).
+
 // the list that defines the menu items: their names, types, and function
 set activeMenu to mainMenu.
 runpath("lib_menu.ksm").
@@ -493,6 +532,7 @@ until done {
 	
 	//local shipHeading is headingOf(hVel).
 	
+	//>> ### Mode specific stuff 
 	if mode = m_takeoff {
 		set controlAlt to false.
 		local pos1 is selectedRunway[1]:position + heightOffsetVec.
@@ -669,6 +709,8 @@ until done {
 		set vecs[vd_pos]:start to circleLoc:position.
 		print "r dist: " + round(centerPos:mag) + "m   " at (round(terminal:width*0.5),terminal:height-2).
 	}
+	//<<
+	
 	
 	// ### ALT ###
 	if controlAlt {
@@ -683,6 +725,40 @@ until done {
 		
 		set targetPitch to 90 - arccos(desiredVV/max(0.1,airspeed)).
 		set targetPitch to min(maxClimbAngle,max(-25,targetPitch)).
+		
+		// Terrain avoidance
+		if terrainDetection and ship:status = "Flying" {
+			
+			set dT to time:seconds - oldTime.
+			set oldTime to time:seconds.
+			
+			local velAngRot is min(45,vang(vel,velLast) / dT). //how much degrees we should rotate the accel vector between steps
+			local velRotAxis is vcrs(velLast,vel).  //the axis that we should rotate the acc vec around
+			set velLast to vel.
+			local velTemp is angleaxis(velAngRot * timeIncrement * 0.5,velRotAxis) * vel.
+			local posTemp is v(0,0,0).
+
+			local terrainClimb is -90.
+			
+			
+			local heightMarginVec is upVec * heightMargin.
+			
+			for i in range(steps) {
+				set vd_terrainlist[i]:start to posTemp.
+				set posTemp to posTemp + velTemp * timeIncrement.
+				set velTemp to angleaxis(velAngRot * timeIncrement,velRotAxis) * velTemp.
+				set vd_terrainlist[i]:vec to posTemp - vd_terrainlist[i]:start.
+				
+				local terrainPos is body:geopositionof(posTemp):position + heightMarginVec.
+				local tempClimb is 90 - vang(upVec,terrainPos).
+				
+				if tempClimb > terrainClimb set terrainClimb to tempClimb.
+			}
+			if terrainClimb < lastTerrainClimb set terrainClimb to lastTerrainClimb * 0.998 + terrainClimb * 0.002.
+			set lastTerrainClimb to terrainClimb.
+			
+			set targetPitch to max(targetPitch,terrainClimb).
+		}
 	}
 	//else {
 	//	set targetAlt to round(altitude,1).
