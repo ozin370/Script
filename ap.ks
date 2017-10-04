@@ -27,7 +27,7 @@ lock throttle to th.
 	set bankHardPid to PIDLOOP(0.2, 0.01, 0.4, -90, 90).
 
 	set attackPid to PIDLOOP(3, 0.0, 3, -10, 10). //old: PIDLOOP(3, 0.0, 10, -10, 10).
-	set pitchPid to PIDLOOP(3.0, 0.2, 3.0, -10, 10). //(3.0, 0.3, 2.0, -15, 15). //outputs extra climb angle to get the velocity climb angle corrected
+	set pitchPid to PIDLOOP(3.0, 0.2, 3.0, -10, 30). //(3.0, 0.3, 2.0, -15, 15). //outputs extra climb angle to get the velocity climb angle corrected
 	
 	
 	// set rollPid to init_roll_pid().
@@ -50,6 +50,7 @@ lock throttle to th.
 	local m_cruise is 4.
 	local m_circle is 5.
 	local m_taxi is 6.
+	local m_waypoints is 7.
 	
 	local mode is m_manual.
 	local submode is m_manual.
@@ -99,25 +100,35 @@ lock throttle to th.
 	local accLast is v(0,0,0.1).
 	local oldTime is time:seconds - 0.02.
 	local lastTerrainClimb is 0.
+	local terrainVecs is true.
 	
 	local vd_stTarget is vecs_add(v(0,0,0),v(0,0,0),green,"",0.2).
 	local vd_st is vecs_add(v(0,0,0),v(0,0,0),magenta,"",0.2).
 	local vd_facing is vecs_add(v(0,0,0),v(0,0,0),rgba(1,0,1,0.2),"",0.2).
 	local vd_vel is vecs_add(v(0,0,0),velocity:surface,yellow,"",0.2).
 	local vd_roll is vecs_add(v(0,0,0),v(0,0,0),cyan,"",0.2).
-	set vd_terrainlist to list().
 	
+	set vd_terrainlist to list().
 	function createTerrainVecdraws {
-		for vd in vd_terrainlist { set vd:show to false. }
+		showTerrainVecdraws(false).
 		set vd_terrainlist to list().
 		for i in range(steps) {
-			vd_terrainlist:add(vecdraw(v(0,0,0),v(0,0,0),rgba(1,0.5,0,0.5),"",1,true,1)).
+			vd_terrainlist:add(vecdraw(v(0,0,0),v(0,0,0),rgba(1,i/steps,0,0.5),"",1,terrainVecs,2)).
 		}
+	}
+	function showTerrainVecdraws {
+		parameter p.
+		for i in range(vd_terrainlist:length) { set vd_terrainlist[i]:show to p. } //color to rgba(1,i/steps,0,0.5). }
 	}
 	createTerrainVecdraws().
 	
 	local vd_pos is vecs_add(v(0,0,0),up:vector * 1000,yellow,"",10).
 	set vecs[vd_pos]:show to false.
+	
+	local waypoints is list().
+	local wp_lat is 0.
+	local wp_lng is 90.
+	local vd_waypoint_active is vecdraw(v(0,0,0),v(0,0,0),cyan,"",1,false,0.5).
 	
 	function saveSettings {
 		local lex is lexicon(
@@ -153,9 +164,7 @@ lock throttle to th.
 		}
 		else return false.
 	}
-	
 	loadSettings().
-	
 	
 	local runways is list().
 	runways:add(list("KSC 09", 
@@ -193,6 +202,23 @@ lock throttle to th.
 	//	LATLNG(79.5753842582846,-77.4291734065947), LATLNG(79.5749734051539,-77.4497455022557))).
 	//runways:add(list("NP Take-off", 
 	//	LATLNG(79.5755083506188,-77.4062036132134), LATLNG(79.4471941169014,-77.5627323048577))).
+	
+	//### Load/save runways, need to wait for issue #2105 to be fixed before it can be used:
+	//function saveRunways {
+	//	local filePath is path("json/runways/" + body:name + ".json").
+	//	writejson(runways, filePath).
+	//}
+	//
+	//function loadRunways {
+	//	local filePath is path("json/runways/" + body:name + ".json").
+	//	
+	//	if exists(filePath) {
+	//		set runways to readjson(filePath).
+	//		return true.
+	//	}
+	//	else return false.
+	//}
+	//loadRunways().
 	
 	local runwayIndex is 0.
 	local selectedRunway is runways[runwayIndex].
@@ -249,7 +275,7 @@ set mainMenu to list(
 	list("Climb angle:",	"number", 	{ parameter p is sv. if p <> sv set targetPitch to max(-90,min(90,p)). return round(targetPitch,2). }, 1),
 	list("",				"text"),
 	list("Altitude control:","bool", 	{ parameter p is sv. if p <> sv set controlAlt to boolConvert(p). return controlAlt. }),
-	list("Altitude target:","number", { parameter p is sv. if p <> sv set targetAlt to max(0,round(p,1)). return round(targetAlt,1). }, 10),
+	list("Altitude target:","number", { parameter p is sv. if p <> sv set targetAlt to max(0,round(p,1)). return round(targetAlt,1). }, 100),
 	list("-",			"line"),
 	list("Terrain detection:","bool", 	{ parameter p is sv. if p <> sv set terrainDetection to boolConvert(p). return terrainDetection. }),
 	list("[>] Detection settings","menu" , 	{ return terrainMenu. }),
@@ -257,6 +283,7 @@ set mainMenu to list(
 	//list("Bank Hard:",	"bool", 	{ parameter p is sv. if p <> sv set bankHard to boolConvert(p). return bankHard. }),
 	
 	list("-",			"line"),
+	list("Vecdraws:"	,"bool", 	{ parameter p is sv. if p <> sv { set showVecsVar to boolConvert(p). showVecs(showVecsVar). } return showVecsVar. }),
 	list("[>] STEERINGMANAGER",	"menu" , 	{ return steeringMenu. }),
 	list("[>] VESSEL SETTINGS",	"menu" , 	{ return settingsMenu. }),
 	list("[X] Exit", 			"action", { set done to true. })
@@ -300,6 +327,18 @@ function setMode {
 		set circleLoc to ship:geoposition.
 		set vecs[vd_pos]:show to true.
 	}
+	else if mode = m_waypoints {
+		set submode to m_circle.
+		set modeString to "waypoints".
+		set waypoints to list().
+		set circleRadius to landingRadius.
+		waypoints:add(body:geopositionof(vxcl(up:vector,ship:facing:vector):normalized * landingRadius * 2)).
+		set wp_lat to round(waypoints[0]:lat,4).
+		set wp_lng to round(waypoints[0]:lng,4).
+		set controlAlt to true.
+		set vecs[vd_pos]:show to true.
+		set vd_waypoint_active:show to true.
+	}
 }
 
 
@@ -326,6 +365,10 @@ set modesMenu to list(
 		}
 		setMenu(circleModeMenu).
 	}),
+	list("Waypoints",	"action", 	{
+		if mode <> m_waypoints setMode(m_waypoints).
+		setMenu(waypointsMenu).
+	}),
 	list("-",				"line"),
 	list("[<] MAIN MENU",		"backmenu", { return mainMenu. })
 ).
@@ -333,6 +376,17 @@ set modesMenu to list(
 set circleModeMenu to list(
 	list("Circle Radius:",	"number", 	{ parameter p is sv. if p <> sv set circleRadius to max(100,round(p)). return circleRadius. }, 100),
 	list("Clock-wise:",		"bool", 	{ parameter p is sv. if p <> sv set clockwise to boolConvert(p). return clockwise. }),
+	list("-",				"line"),
+	list("[<] MAIN MENU",		"backmenu", { return mainMenu. })
+).
+
+set waypointsMenu to list(
+	list("New waypoint:",	"text"),
+	list("Latitude:",	"number", 	{ parameter p is sv. if p <> sv set wp_lat to min(90,max(-90,round(p,4))). return wp_lat. }, 0.1),
+	list("Longitude:",	"number", 	{ parameter p is sv. if p <> sv set wp_lng to min(180,max(-180,round(p,4))). return wp_lng. }, 0.1),
+	list("[Add]", 		"action", { waypoints:add(latlng(wp_lat,wp_lng)). }),
+	list("",						"text"),
+	list("Waypoints left:",			"display", { return waypoints:length. }),
 	list("-",				"line"),
 	list("[<] MAIN MENU",		"backmenu", { return mainMenu. })
 ).
@@ -427,6 +481,7 @@ set terrainMenu to list(
 	//list(name,type,get/set function,increment multiplier (for numbers)).
 	list("Terrain Detection","text"),
 	list("Enabled:",		"bool", 	{ parameter p is sv. if p <> sv set terrainDetection to boolConvert(p). return terrainDetection. }),
+	list("Vecdraws:",		"bool", 	{ parameter p is sv. if p <> sv { set terrainVecs to boolConvert(p). showTerrainVecdraws(terrainVecs). } return terrainVecs. }),
 	list("Minimum Radar-Alt:",	"number", 	{ parameter p is sv. if p <> sv set heightMargin to max(10,round(p)). return heightMargin. }, 10),
 	list("",				"text"),
 	list("Prediction Length:",	"number", 	{ parameter p is sv. if p <> sv { set totalTime to max(3,round(p)). set timeIncrement to totalTime / steps. } return totalTime. }, 10),
@@ -488,6 +543,7 @@ function findRunway {
 //}
 // <<
 
+local showVecsVar is true.
 function showVecs {
 	parameter b.
 	
@@ -496,12 +552,14 @@ function showVecs {
 		set vecs[vd_st]:show to false.
 		set vecs[vd_facing]:show to false.
 		set vecs[vd_roll]:show to false.
+		if not(showVecsVar) set vecs[vd_stTarget]:show to false.
 	}
 	else if not(vecs[vd_vel]:show) and b {
 		set vecs[vd_vel]:show to true.
 		set vecs[vd_st]:show to true.
 		set vecs[vd_facing]:show to true.
 		set vecs[vd_roll]:show to true.
+		set vecs[vd_stTarget]:show to true.
 	}
 }
 
@@ -677,7 +735,29 @@ until done {
 				set targetSpeed to min(maxBankSpeed + 20 + max(0,circleCenterDist - circleRadius*3) / 100,targetSpeed).
 			}
 		}
+	}
+	else if mode = m_waypoints {
+		//submode is m_circle
+		//waypoints stored in: waypoints (list of geolocs)
 		
+		if activeMenu = waypointsMenu {
+			set vd_waypoint_active:show to true.
+			local waypoint_active is latlng(wp_lat,wp_lng).
+			set vd_waypoint_active:start to waypoint_active:position.
+			set vd_waypoint_active:vec to (vd_waypoint_active:start - body:position):normalized * 20000.
+			if mapview set vd_waypoint_active:width to 0.5.
+			else set vd_waypoint_active:width to 10 + waypoint_active:distance / 600.
+		}
+		else set vd_waypoint_active:show to false.
+		
+		if waypoints:length = 0 setMode(m_circle).
+		else if waypoints:length = 1 set circleRadius to landingRadius * 2.
+		else {
+			
+			if vxcl(upVec,waypoints[0]:position):mag < (2 * landingRadius) waypoints:remove(0).
+			set circleRadius to 1.
+		}
+		set circleLoc to waypoints[0].
 	}
 	
 	if submode = m_circle {
@@ -707,6 +787,7 @@ until done {
 		set targetHeading to headingOf(targetHeadingVec).
 		
 		set vecs[vd_pos]:start to circleLoc:position.
+		set vecs[vd_pos]:vec to upVec * max(300,altitude - circleLoc:terrainheight).
 		print "r dist: " + round(centerPos:mag) + "m   " at (round(terminal:width*0.5),terminal:height-2).
 	}
 	//<<
@@ -744,12 +825,18 @@ until done {
 			local heightMarginVec is upVec * heightMargin.
 			
 			for i in range(steps) {
-				set vd_terrainlist[i]:start to posTemp.
+				
 				set posTemp to posTemp + velTemp * timeIncrement.
 				set velTemp to angleaxis(velAngRot * timeIncrement,velRotAxis) * velTemp.
-				set vd_terrainlist[i]:vec to posTemp - vd_terrainlist[i]:start.
 				
-				local terrainPos is body:geopositionof(posTemp):position + heightMarginVec.
+				
+			
+				
+				
+				local terrainPos is body:geopositionof(posTemp):position.
+				if terrainVecs set vd_terrainlist[i]:start to terrainPos.
+				set terrainPos to terrainPos + heightMarginVec.
+				if terrainVecs set vd_terrainlist[i]:vec to terrainPos - vd_terrainlist[i]:start.
 				local tempClimb is 90 - vang(upVec,terrainPos).
 				
 				if tempClimb > terrainClimb set terrainClimb to tempClimb.
@@ -781,7 +868,7 @@ until done {
 	
 	local velPitch is 90 - vang(upVec,vel).
 	
-	if bankHard and compassError > -20 {
+	if bankHard and compassError > -20 { //not used at the moment
 		if vdot(vcrs(upVec,hVel),hStTarget) > 0 set compassError to -compassError.
 		
 		set stNormal to vcrs(vel,stTarget).
@@ -845,16 +932,22 @@ until done {
 		set wheelPid:kP to 0.015 / max(1,groundspeed/10).
 		set wheelPid:kD to wheelPid:kP * (2/3).
 		set ship:control:wheelsteer to wheelPid:update(time:seconds, wheelError).
+		
 
 		//set ship:control:wheelsteer to wheelError * 0.2 / max(10,groundspeed).
-		if (forwardSpeed - targetSpeed) > 0.1 or targetSpeed = 0 brakes on.
+		if (forwardSpeed - targetSpeed) > 1 or targetSpeed = 0 brakes on.
 		else brakes off.
 		
+		if forwardSpeed < 0 {
+			set ship:control:wheelsteer to -ship:control:wheelsteer.
+			brakes on.
+		}
+		
 		if groundspeed < stallSpeed showVecs(false).
-		else showVecs(true).
+		else if showVecsVar showVecs(true).
 	}
 	else {
-		showVecs(true).
+		if showVecsVar showVecs(true).
 		set ship:control:wheelsteer to 0.
 		
 		if (forwardSpeed - targetSpeed) > 10 brakes on.
