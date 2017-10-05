@@ -388,6 +388,26 @@ set waypointsMenu to list(
 	list("",						"text"),
 	list("Waypoints left:",			"display", { return waypoints:length. }),
 	list("-",				"line"),
+	list("Mountain Tour", 		"action", { set waypoints to list(). 
+											waypoints:add(LATLNG(-0.0288843395763714,-78.3836648093183)).
+											waypoints:add(LATLNG(0.67914185514754,-78.6913483853345)).
+											waypoints:add(LATLNG(1.19860372319739,-78.6467231762604)).
+											waypoints:add(LATLNG(1.63351531487006,-78.1687083922323)).
+											waypoints:add(LATLNG(2.10981070528106,-78.0245233116159)).
+											waypoints:add(LATLNG(2.45625794385979,-78.3769727412787)).
+											waypoints:add(LATLNG(2.06879101827048,-78.8486743538358)).
+											waypoints:add(LATLNG(0.32240593461724,-78.8082277454115)).
+											waypoints:add(LATLNG(0.118015641463436,-79.0404589992632)).
+											waypoints:add(LATLNG(0.237191058345154,-79.4342719546221)).
+											waypoints:add(LATLNG(0.30283674256653,-79.8950644345877)).
+											waypoints:add(LATLNG(-0.383336346233216,-80.2556035108905)).
+											waypoints:add(LATLNG(-1.10275914709192,-80.6558477235641)).
+											waypoints:add(LATLNG(-0.70247962754558,-80.2010409750887)).
+											waypoints:add(LATLNG(-0.471668929400925,-79.7182573970127)).
+											waypoints:add(LATLNG(-0.0714015441448632,-79.2614526472176)).
+											waypoints:add(LATLNG(0.320130369101675,-79.14161965863)).
+											waypoints:add(LATLNG(0.686130991310734,-79.3495663614867)).
+										}),
 	list("[<] MAIN MENU",		"backmenu", { return mainMenu. })
 ).
 
@@ -754,7 +774,7 @@ until done {
 		else if waypoints:length = 1 set circleRadius to landingRadius * 2.
 		else {
 			
-			if vxcl(upVec,waypoints[0]:position):mag < (2 * landingRadius) waypoints:remove(0).
+			if vxcl(upVec,waypoints[0]:position):mag < (0.75 * landingRadius) waypoints:remove(0).
 			set circleRadius to 1.
 		}
 		set circleLoc to waypoints[0].
