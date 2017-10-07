@@ -135,6 +135,7 @@ lock throttle to th.
 	local vd_waypoint_active is vecdraw(v(0,0,0),v(0,0,0),cyan,"",1,false,0.5).
 	
 	local vd_runway_edit is vecdraw(v(0,0,0),v(0,0,0),rgba(1,0.7,0,0.5),"",1,false,40).
+	local vd_runway_normal is vecdraw(v(0,0,0),v(0,0,0),rgba(0.7,0,1,0.5),"",1,false,2).
 	
 	function saveSettings {
 		local lex is lexicon(
@@ -341,10 +342,11 @@ function BuildEditRunwayMenu {
 		list("Inclination",			"display",	{ return round(90 - vang(runways[editRunwayI][1]:position - body:position, runways[editRunwayI][2]:position - runways[editRunwayI][1]:position),4). }),
 		list("=",					"line"),
 		list("[+] Add Taxi WP",		"action",	{ runways[editRunwayI]:add(runways[editRunwayI][runways[editRunwayI]:length-1]). BuildEditRunwayMenu(). setMenu(editRunwayMenu). }),
-		list("[X] Delete Runway", 	"action",	{ remove_waypoint_vecdraws(). runways:remove(editRunwayI). createRunwaysMenues(). setMenu(runwaysEditMenu). set vd_runway_edit:show to false. }),
-		list("[<] Done", 			"action",	{ createRunwaysMenues(). setMenu(runwaysEditMenu). set vd_runway_edit:show to false. remove_waypoint_vecdraws(). })
+		list("[X] Delete Runway", 	"action",	{ remove_waypoint_vecdraws(). runways:remove(editRunwayI). createRunwaysMenues(). setMenu(runwaysEditMenu). set vd_runway_edit:show to false. set vd_runway_normal:show to false. }),
+		list("[<] Done", 			"action",	{ createRunwaysMenues(). setMenu(runwaysEditMenu). set vd_runway_edit:show to false. set vd_runway_normal:show to false. remove_waypoint_vecdraws(). })
 	).
 	
+	set runway_normal_check to 0.
 	remove_waypoint_vecdraws().
 	
 	for wp in range(3,runways[editRunwayI]:length,1) {
@@ -381,7 +383,7 @@ set mainMenu to list(
 											set targetHeading to p.
 											set updateCam to true.
 										} 
-										return round(targetHeading,2). }, 1),
+										return round(targetHeading,2). }, 10),
 	list("-",				"line"),
 	list("Climb angle:",	"number", 	{ parameter p is sv. if p <> sv set targetPitch to max(-90,min(90,p)). return round(targetPitch,2). }, 1),
 	list("",				"text"),
@@ -670,6 +672,21 @@ function findRunway {
 	}
 }
 
+function geo_normalvector {
+	parameter geopos,size_.
+	set size to max(5,size_).
+	local center is geopos:position.
+	local fwd is vxcl(center-body:position,body:angularvel):normalized.
+	local right is vcrs(fwd,center-body:position):normalized.
+	local p1 is body:geopositionof(center + fwd * size_ + right * size_).
+	local p2 is body:geopositionof(center + fwd * size_ - right * size_).
+	local p3 is body:geopositionof(center - fwd * size_).
+	
+	local vec1 is p1:position-p3:position.
+	local vec2 is p2:position-p3:position.
+	return vcrs(vec1,vec2):normalized.
+}
+
 // >> ### Camera ###
 //function faceCamTo {
 //	parameter horizontalVec.
@@ -735,6 +752,20 @@ until done {
 			set vd_waypoint_list[i]:start to runways[editRunwayI][(3 + i)]:position.
 			set vd_waypoint_list[i]:vec to upVec * 10.
 		}
+		
+		if runway_normal_check > vd_runway_edit:vec:mag set runway_normal_check to 0.
+		set runway_normal_check to runway_normal_check + 5.
+		
+		local runwayAverageNormal is vxcl(vd_runway_edit:vec,upVec).
+		local normalVecPos is body:geopositionof(vd_runway_edit:start + vd_runway_edit:vec:normalized * runway_normal_check).
+		local normalVec is geo_normalvector(normalVecPos,15).
+		
+		set vd_runway_normal:show to true.
+		set vd_runway_normal:start to normalVecPos:position.
+		set vd_runway_normal:vec to normalVec * 200.
+		local normalVecAngle is vang(normalVec,runwayAverageNormal).
+		set vd_runway_normal:color to rgba(normalVecAngle / 10, (10 - normalVecAngle) / 10, 0, 0.9).
+		set vd_runway_normal:label to round(normalVecAngle,1):tostring().
 	}
 	
 	//>> ### Mode specific stuff 
