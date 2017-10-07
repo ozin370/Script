@@ -5,9 +5,13 @@ set config:ipu to max(config:ipu,2000).
 // autopilot
 runoncepath("lib_UI.ks").
 runoncepath("steeringmanager.ksm").
-//set steeringmanager:yawpid:ki to 0.
-//set steeringmanager:yawpid:kp to 5.
-loadSteering().
+
+set steeringmanager:yawpid:ki to 0.
+set steeringmanager:pitchpid:ki to 0.
+set steeringmanager:rollpid:ki to 0.
+
+if loadSteering() HUDTEXT("Loaded steeringmanager settings from 0:/json/" + ship:name + "/steering.json",15,2,25,yellow,false).
+else HUDTEXT("No steeringmanager settings found. Using default values",8,2,25,yellow,false).
 
 sas off.
 set st to lookdirup(ship:facing:vector,up:vector).
@@ -130,6 +134,8 @@ lock throttle to th.
 	local wp_lng is 90.
 	local vd_waypoint_active is vecdraw(v(0,0,0),v(0,0,0),cyan,"",1,false,0.5).
 	
+	local vd_runway_edit is vecdraw(v(0,0,0),v(0,0,0),rgba(1,0.7,0,0.5),"",1,false,40).
+	
 	function saveSettings {
 		local lex is lexicon(
 			"stallSpeed", stallSpeed,
@@ -160,6 +166,8 @@ lock throttle to th.
 			if lex:haskey("heightOffset") set heightOffset to lex["heightOffset"].
 			if lex:haskey("descentAngle") set descentAngle to lex["descentAngle"].
 			if lex:haskey("maxClimbAngle") set maxClimbAngle to lex["maxClimbAngle"].
+			
+			HUDTEXT("Loaded vessel settings from " + filePath,15,2,25,cyan,false).
 			return true.
 		}
 		else return false.
@@ -167,28 +175,8 @@ lock throttle to th.
 	loadSettings().
 	
 	local runways is list().
-	runways:add(list("KSC 09", 
-		LATLNG(-0.0486697432694389, -74.7220377114077), LATLNG(-0.0502131096942382, -74.4951289901873), // <- the first two geolocations in the list make up the runway. The plane will land close to the first one facing the second, and will take off facing the same way as well.
-		LATLNG(-0.0633901920593838,-74.6177340872895), LATLNG(-0.0667142201078598,-74.6245921697804),LATLNG(-0.0574241046721476,-74.6304580442504))). // <- taxi/parking waypoints. as many waypoints as you want, the last one being the parking spot
-	runways:add(list("KSC 27", 
-		LATLNG(-0.0502131096942382, -74.4951289901873), LATLNG(-0.0486697432694389, -74.7220377114077), 
-		LATLNG(-0.0633901920593838,-74.6177340872895), LATLNG(-0.0667142201078598,-74.6245921697804),LATLNG(-0.0574241046721476,-74.6304580442504))). 
-	runways:add(list("Island 09", 
-		LATLNG(-1.51806713434498,-71.9686515236803), LATLNG(-1.51566431260178,-71.8513882426904),
-		LATLNG(-1.52246003880166,-71.8951322255196), LATLNG(-1.52238917854372,-71.9029429161532))).
-	runways:add(list("Island 27", 
-		LATLNG(-1.51566431260178,-71.8513882426904), LATLNG(-1.51806713434498,-71.9686515236803),
-		LATLNG(-1.52246003880166,-71.8951322255196), LATLNG(-1.52238917854372,-71.9029429161532))).
-	runways:add(list("Island Roof", 
-		LATLNG(-1.84067446835453,-71.9819052653066), LATLNG(-1.76179578429485,-71.9823239609914))).
-	runways:add(list("Field", 
-		LATLNG(0.17358481490647,-74.9642214448504), LATLNG(0.232681172753888,-75.0955666284595))).
-	runways:add(list("Inclined", 
-		LATLNG(-0.7378812868294,-74.8004934841927), LATLNG(-0.628744824988205,-74.8807989589523))).
-	runways:add(list("Mountain of Death", 
-		LATLNG(0.501210374567098,-79.0620192967054), LATLNG(0.551044874260144,-79.1124370941125))).
-	runways:add(list("Death Peak", 
-		LATLNG(0.638609133472562,-79.3483162306698), LATLNG(0.677100551194089,-79.341714788505))).
+	
+	
 	//non-stock runways
 	//runways:add(list("Lake Landing", 
 	//	LATLNG(11.1338539818121,-63.4266075453381), LATLNG(11.2797121236681,-63.5267638608701),
@@ -218,7 +206,75 @@ lock throttle to th.
 	//	}
 	//	else return false.
 	//}
-	//loadRunways().
+	
+	//load and save workaround, since loading geocoordinates from jsons is currently bugged:
+	function saveRunways {
+		local filePath is path("json/runways/" + body:name + ".json").
+		local runwaysConverted is list().
+		
+		for rw in runways {
+			local rwTemp is list().
+			rwTemp:add(rw[0]). //name string
+			
+			//convert each geocoordinate item to a pair of lat and lng numbers and store those in the runway list instead.
+			for i in range(1,rw:length,1) {
+				rwTemp:add(rw[i]:lat).
+				rwTemp:add(rw[i]:lng).
+			}
+			runwaysConverted:add(rwTemp).
+		}
+		writejson(runwaysConverted, filePath).
+		HUDTEXT("Saved " + runways:length + " runways to " + filePath,21,1,25,yellow,false).
+	}
+	
+	function loadRunways {
+		local filePath is path("json/runways/" + body:name + ".json").
+		
+		if exists(filePath) {
+			set runwaysConverted to readjson(filePath).
+			set runways to list().
+			
+			for rwTemp in runwaysConverted {
+				local rw is list().
+				rw:add(rwTemp[0]). //name string
+				
+				for i in range(1,rwTemp:length-1,2) { //starting at index 1, increment by 2 (to get lat-lng pairs)
+					rw:add(latlng(rwTemp[i],rwTemp[i+1])).
+				}
+				runways:add(rw).
+			}
+			if runways:length > 0 {
+				HUDTEXT("Loaded " + runways:length + " runways from " + filePath,15,1,25,green,false).
+				return true.
+			}
+			else { 
+				HUDTEXT(filePath + " found, but contains no runways!",20,1,25,red,true).
+				return false.
+			}
+		}
+		else {
+			HUDTEXT("No runways loaded, " + filePath + " does not exist",20,1,25,red,true).
+			return false.
+		}
+	}
+	
+	//saveRunways().
+	if not loadRunways() {
+		runways:add(list("KSC 09", 
+			LATLNG(-0.0486697432694389, -74.7220377114077), LATLNG(-0.0502131096942382, -74.4951289901873), // <- the first two geolocations in the list make up the runway. The plane will land close to the first one facing the second, and will take off facing the same way as well.
+			LATLNG(-0.0633901920593838,-74.6177340872895), LATLNG(-0.0667142201078598,-74.6245921697804),LATLNG(-0.0574241046721476,-74.6304580442504))). // <- taxi/parking waypoints. as many waypoints as you want, the last one being the parking spot
+		runways:add(list("KSC 27", 
+			LATLNG(-0.0502131096942382, -74.4951289901873), LATLNG(-0.0486697432694389, -74.7220377114077), 
+			LATLNG(-0.0633901920593838,-74.6177340872895), LATLNG(-0.0667142201078598,-74.6245921697804),LATLNG(-0.0574241046721476,-74.6304580442504))). 
+		runways:add(list("Island 09", 
+			LATLNG(-1.51806713434498,-71.9686515236803), LATLNG(-1.51566431260178,-71.8513882426904),
+			LATLNG(-1.52246003880166,-71.8951322255196), LATLNG(-1.52238917854372,-71.9029429161532))).
+		runways:add(list("Island 27", 
+			LATLNG(-1.51566431260178,-71.8513882426904), LATLNG(-1.51806713434498,-71.9686515236803),
+			LATLNG(-1.52246003880166,-71.8951322255196), LATLNG(-1.52238917854372,-71.9029429161532))).
+			
+		saveRunways().
+	}
 	
 	local runwayIndex is 0.
 	local selectedRunway is runways[runwayIndex].
@@ -231,8 +287,8 @@ lock throttle to th.
 
 
 set terminal:brightness to 1.
-set terminal:width to 45.
-set terminal:height to 36.
+set terminal:width to 46.
+set terminal:height to 40.
 clearscreen.
 
 
@@ -244,16 +300,71 @@ local valueLength is 12.	//how many characters of the menu item values to displa
 local sv is -9.9993134. 	// just a value that is extremely unlikely to be set to any of the varibles we want to change with the menu
 
 local runwaysMenu is list().
-local i is 0.
-until i >= runways:length {
-	local rw is runways[i].
-	if not rw[0]:contains("take-off") {
-		runwaysMenu:add(list(rw[0],	"action" , 	{ set selectedRunway to rw. setMode(m_land). setMenu(mainMenu). })).
+local runwaysEditMenu is list().
+function createRunwaysMenues {
+	set runwaysMenu to list().
+	set runwaysEditMenu to list().
+	local i is 0.
+	until i >= runways:length {
+		local rw is runways[i].
+		local rwI is i.
+		if not rw[0]:contains("take-off") {
+			runwaysMenu:add(list(rw[0],	"action" , 	{ set selectedRunway to rw. setMode(m_land). setMenu(mainMenu). })).
+			runwaysEditMenu:add(list(rw[0],	"action" , 	{ set editRunway to rw. set editRunwayI to rwI. BuildEditRunwayMenu(). set vd_runway_edit:show to true. setMenu(editRunwayMenu). })).
+		}
+		set i to i + 1.
 	}
-	set i to i + 1.
+	runwaysMenu:add(list("-",				"line")).
+	runwaysMenu:add(list("[<] MAIN MENU",		"backmenu", { return mainMenu. })).
+	
+	runwaysEditMenu:add(list("[+] New runway",			"action", 	{ runways:add(list("New runway",ship:geoposition,ship:geoposition)). set editRunwayI to i. BuildEditRunwayMenu(). set vd_runway_edit:show to true. setMenu(editRunwayMenu). })).
+	runwaysEditMenu:add(list("-",						"line")).
+	runwaysEditMenu:add(list("[Reload] all from JSON",	"action", 	{ loadRunways(). createRunwaysMenues(). setMenu(runwaysEditMenu). })).
+	runwaysEditMenu:add(list("[Save] all to JSON",		"action", 	{ saveRunways(). setMenu(mainMenu). })).
+	runwaysEditMenu:add(list("[<] MAIN MENU",			"backmenu", { return mainMenu. })).
 }
-runwaysMenu:add(list("-",				"line")).
-runwaysMenu:add(list("[<] MAIN MENU",		"backmenu", { return mainMenu. })).
+createRunwaysMenues().
+
+set vd_waypoint_list to list().
+set editRunwayMenu to list().
+function BuildEditRunwayMenu {
+	set editRunwayMenu to list(
+		list("Runway name:",		"string",	{ parameter p is sv. if p <> sv set runways[editRunwayI][0] to p. return runways[editRunwayI][0]. }),
+		list("-",					"line"),
+		list("Start Lat:",			"number", 	{ parameter p is sv. if p <> sv set runways[editRunwayI][1] to latlng(min(90,max(-90,round(p,5))),runways[editRunwayI][1]:lng). return round(runways[editRunwayI][1]:lat,5). }, 0.01),
+		list("Start Lng:",			"number", 	{ parameter p is sv. if p <> sv set runways[editRunwayI][1] to latlng(runways[editRunwayI][1]:lat,min(180,max(-180,round(p,5)))). return round(runways[editRunwayI][1]:lng,5). }, 0.01),
+		list("",					"text"),
+		list("End Lat:",			"number", 	{ parameter p is sv. if p <> sv set runways[editRunwayI][2] to latlng(min(90,max(-90,round(p,5))),runways[editRunwayI][2]:lng). return round(runways[editRunwayI][2]:lat,5). }, 0.01),
+		list("End Lng:",			"number", 	{ parameter p is sv. if p <> sv set runways[editRunwayI][2] to latlng(runways[editRunwayI][2]:lat,min(180,max(-180,round(p,5)))). return round(runways[editRunwayI][2]:lng,5). }, 0.01),
+		list("",					"text"),
+		list("Length",				"display",	{ return round((runways[editRunwayI][2]:position - runways[editRunwayI][1]:position):mag). }),
+		list("Inclination",			"display",	{ return round(90 - vang(runways[editRunwayI][1]:position - body:position, runways[editRunwayI][2]:position - runways[editRunwayI][1]:position),4). }),
+		list("=",					"line"),
+		list("[+] Add Taxi WP",		"action",	{ runways[editRunwayI]:add(runways[editRunwayI][runways[editRunwayI]:length-1]). BuildEditRunwayMenu(). setMenu(editRunwayMenu). }),
+		list("[X] Delete Runway", 	"action",	{ remove_waypoint_vecdraws(). runways:remove(editRunwayI). createRunwaysMenues(). setMenu(runwaysEditMenu). set vd_runway_edit:show to false. }),
+		list("[<] Done", 			"action",	{ createRunwaysMenues(). setMenu(runwaysEditMenu). set vd_runway_edit:show to false. remove_waypoint_vecdraws(). })
+	).
+	
+	remove_waypoint_vecdraws().
+	
+	for wp in range(3,runways[editRunwayI]:length,1) {
+		local i is wp.
+		if wp = 3 editRunwayMenu:insert(editRunwayMenu:length - 4, list("-", "line")).
+		else editRunwayMenu:insert(editRunwayMenu:length - 4, list("", "text")).
+		editRunwayMenu:insert(editRunwayMenu:length - 4, list("Waypoint " + (i - 2) + " [Remove]","action",	{ runways[editRunwayI]:remove(i). BuildEditRunwayMenu(). setMenu(editRunwayMenu). })).
+		editRunwayMenu:insert(editRunwayMenu:length - 4, list("Latitude:", "number", { parameter p is sv. if p <> sv set runways[editRunwayI][i] to latlng(min(90,max(-90,round(p,5))),runways[editRunwayI][i]:lng). return round(runways[editRunwayI][i]:lat,5). }, 0.001)).
+		editRunwayMenu:insert(editRunwayMenu:length - 4, list("Longitude:",	"number", 	{ parameter p is sv. if p <> sv set runways[editRunwayI][i] to latlng(runways[editRunwayI][i]:lat,min(180,max(-180,round(p,5)))). return round(runways[editRunwayI][i]:lng,5). }, 0.001)).
+	
+		vd_waypoint_list:add(vecdraw(v(0,0,0),v(0,0,0),green,(i-2):tostring(),1,false,0.5)).
+	}
+}
+function remove_waypoint_vecdraws {
+	for i in range(0,vd_waypoint_list:length,1) {
+		set vd_waypoint_list[i]:show to false.
+	}
+	set vd_waypoint_list to list().
+}
+
 
 set mainMenu to list(
 	//list("Modes",		"text"),
@@ -284,8 +395,11 @@ set mainMenu to list(
 	
 	list("-",			"line"),
 	list("Vecdraws:"	,"bool", 	{ parameter p is sv. if p <> sv { set showVecsVar to boolConvert(p). showVecs(showVecsVar). } return showVecsVar. }),
-	list("[>] STEERINGMANAGER",	"menu" , 	{ return steeringMenu. }),
-	list("[>] VESSEL SETTINGS",	"menu" , 	{ return settingsMenu. }),
+	
+	
+	list("[>] Runways editor",	"menu" , 	{ return runwaysEditMenu. }),
+	list("[>] Steeringmanager",	"menu" , 	{ return steeringMenu. }),
+	list("[>] Vessel settings",	"menu" , 	{ return settingsMenu. }),
 	list("[X] Exit", 			"action", { set done to true. })
 ).
 
@@ -410,6 +524,8 @@ set waypointsMenu to list(
 										}),
 	list("[<] MAIN MENU",		"backmenu", { return mainMenu. })
 ).
+
+
 
 
 set steeringMenu to list(
@@ -610,6 +726,17 @@ until done {
 	
 	//local shipHeading is headingOf(hVel).
 	
+	if activeMenu = editRunwayMenu {
+		set vd_runway_edit:start to runways[editRunwayI][1]:position + upVec * 10.
+		set vd_runway_edit:vec to (runways[editRunwayI][2]:position + upVec * 10) - vd_runway_edit:start.
+		
+		for i in range(0,vd_waypoint_list:length,1) {
+			set vd_waypoint_list[i]:show to true.
+			set vd_waypoint_list[i]:start to runways[editRunwayI][(3 + i)]:position.
+			set vd_waypoint_list[i]:vec to upVec * 10.
+		}
+	}
+	
 	//>> ### Mode specific stuff 
 	if mode = m_takeoff {
 		set controlAlt to false.
@@ -656,7 +783,7 @@ until done {
 		local runwayVecNormalized is runwayVec:normalized.
 		local circleForwardOffset is landingRadius + 800 + 20 * maxBankSpeed.
 		
-		if submode = m_manual or (vang(vxcl(upVec,pos1),hVel) < 5 and vang(hVel,runwayVec) < 20 and altitude-targetAlt < 200 and pos1dist < (300 + circleForwardOffset)) {
+		if submode = m_manual or (vang(vxcl(upVec,pos1),hVel) < 5 and vang(hVel,runwayVec) < 45 and altitude-targetAlt < 500 and pos1dist < (300 + circleForwardOffset)) {
 			if submode = m_circle {
 				set submode to m_manual.
 				set vecs[vd_pos]:show to false.
