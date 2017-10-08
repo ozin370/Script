@@ -3,7 +3,7 @@
 set config:ipu to max(config:ipu,2000).
 
 // autopilot
-runoncepath("lib_UI.ks").
+runoncepath("lib_UI.ksm").
 runoncepath("steeringmanager.ksm").
 
 set steeringmanager:yawpid:ki to 0.
@@ -22,24 +22,16 @@ lock throttle to th.
 
 // #### PID ###
 // >>
-	
 	set maxBank to 50.
 	function init_bank_pid {
 	  return PIDLOOP(3, 0.00, 3, -maxBank, maxBank).
 	}
 	set bankPid to init_bank_pid().
-	set bankHardPid to PIDLOOP(0.2, 0.01, 0.4, -90, 90).
 
 	set attackPid to PIDLOOP(3, 0.0, 3, -10, 10). //old: PIDLOOP(3, 0.0, 10, -10, 10).
 	set pitchPid to PIDLOOP(3.0, 0.2, 3.0, -10, 30). //(3.0, 0.3, 2.0, -15, 15). //outputs extra climb angle to get the velocity climb angle corrected
-	
-	
-	// set rollPid to init_roll_pid().
 	set throtPid to PIDLOOP(0.1, 0.011, 0.15, 0, 1).
-	
-	set climbPid to PIDLOOP(0.4, 0.0, 0.05, -30, 35).
 	set circlePid to PIDLOOP(0.1, 0.000, 0.01, 0, 1).
-	
 	set wheelPid to PIDLOOP(0.15, 0.000, 0.1, -1, 1).
 	
 	set steeringmanager:rollcontrolanglerange to 180. //force steeringmanager not to ignore roll
@@ -95,10 +87,10 @@ lock throttle to th.
 	
 	//terrain checks:
 	local terrainDetection is true.
-	local totalTime is 30. 
-	local steps is 10.
+	local totalTime is 20. 
+	local steps is 8.
 	local timeIncrement is totalTime / steps.
-	local heightMargin is 50.
+	local heightMargin is 70.
 	local dT is 0.02.
 	local velLast is velocity:surface.
 	local accLast is v(0,0,0.1).
@@ -106,11 +98,11 @@ lock throttle to th.
 	local lastTerrainClimb is 0.
 	local terrainVecs is true.
 	
-	local vd_stTarget is vecs_add(v(0,0,0),v(0,0,0),green,"",0.2).
-	local vd_st is vecs_add(v(0,0,0),v(0,0,0),magenta,"",0.2).
-	local vd_facing is vecs_add(v(0,0,0),v(0,0,0),rgba(1,0,1,0.2),"",0.2).
-	local vd_vel is vecs_add(v(0,0,0),velocity:surface,yellow,"",0.2).
-	local vd_roll is vecs_add(v(0,0,0),v(0,0,0),cyan,"",0.2).
+	local vd_stTarget is vecdraw(v(0,0,0),v(0,0,0),green,"",1,true,0.2).
+	local vd_st is vecdraw(v(0,0,0),v(0,0,0),magenta,"",1,true,0.2).
+	local vd_facing is vecdraw(v(0,0,0),v(0,0,0),rgba(1,0,1,0.2),"",1,true,0.2).
+	local vd_vel is vecdraw(v(0,0,0),v(0,0,0),rgba(0,1,0,0.2),"",1,true,0.2).
+	local vd_roll is vecdraw(v(0,0,0),v(0,0,0),cyan,"",1,true,0.2).
 	
 	set vd_terrainlist to list().
 	function createTerrainVecdraws {
@@ -126,8 +118,7 @@ lock throttle to th.
 	}
 	createTerrainVecdraws().
 	
-	local vd_pos is vecs_add(v(0,0,0),up:vector * 1000,yellow,"",10).
-	set vecs[vd_pos]:show to false.
+	local vd_pos is vecdraw(v(0,0,0),up:vector * 1000,yellow,"",1,false,10).
 	
 	local waypoints is list().
 	local wp_lat is 0.
@@ -177,21 +168,6 @@ lock throttle to th.
 	
 	local runways is list().
 	
-	
-	//non-stock runways
-	//runways:add(list("Lake Landing", 
-	//	LATLNG(11.1338539818121,-63.4266075453381), LATLNG(11.2797121236681,-63.5267638608701),
-	//	LATLNG(11.2601379963262,-63.5049064266831), LATLNG(11.2564222580563,-63.502449653876),LATLNG(11.2543177537943,-63.505745748003))).
-	//runways:add(list("Lake Take-off", 
-	//	LATLNG(11.2797121236681,-63.5267638608701), LATLNG(11.1338539818121,-63.4266075453381))).
-	//runways:add(list("Black Crags", 
-	//	LATLNG(11.322420652578,-87.6872216129112), LATLNG(11.2554615165241,-87.6959890407062))).
-	//runways:add(list("NP Landing", 
-	//	LATLNG(79.4471941169014,-77.5627323048577), LATLNG(79.5755083506188,-77.4062036132134),
-	//	LATLNG(79.5753842582846,-77.4291734065947), LATLNG(79.5749734051539,-77.4497455022557))).
-	//runways:add(list("NP Take-off", 
-	//	LATLNG(79.5755083506188,-77.4062036132134), LATLNG(79.4471941169014,-77.5627323048577))).
-	
 	//### Load/save runways, need to wait for issue #2105 to be fixed before it can be used:
 	//function saveRunways {
 	//	local filePath is path("json/runways/" + body:name + ".json").
@@ -210,7 +186,7 @@ lock throttle to th.
 	
 	//load and save workaround, since loading geocoordinates from jsons is currently bugged:
 	function saveRunways {
-		local filePath is path("json/runways/" + body:name + ".json").
+		local filePath is path("0:/json/runways/" + body:name + ".json").
 		local runwaysConverted is list().
 		
 		for rw in runways {
@@ -229,7 +205,7 @@ lock throttle to th.
 	}
 	
 	function loadRunways {
-		local filePath is path("json/runways/" + body:name + ".json").
+		local filePath is path("0:/json/runways/" + body:name + ".json").
 		
 		if exists(filePath) {
 			set runwaysConverted to readjson(filePath).
@@ -259,8 +235,8 @@ lock throttle to th.
 		}
 	}
 	
-	//saveRunways().
-	if not loadRunways() {
+	if not loadRunways() { 
+		//loading runways from json failed, so use these as default and attempt save
 		runways:add(list("KSC 09", 
 			LATLNG(-0.0486697432694389, -74.7220377114077), LATLNG(-0.0502131096942382, -74.4951289901873), // <- the first two geolocations in the list make up the runway. The plane will land close to the first one facing the second, and will take off facing the same way as well.
 			LATLNG(-0.0633901920593838,-74.6177340872895), LATLNG(-0.0667142201078598,-74.6245921697804),LATLNG(-0.0574241046721476,-74.6304580442504))). // <- taxi/parking waypoints. as many waypoints as you want, the last one being the parking spot
@@ -284,8 +260,6 @@ lock throttle to th.
 
 // ### Console ###
 // >>
-
-
 
 set terminal:brightness to 1.
 set terminal:width to 46.
@@ -412,11 +386,11 @@ function setMode {
 	if mode = m_land {
 		if ship:status = "Landed" {
 			set submode to m_manual.
-			set vecs[vd_pos]:show to false.
+			set vd_pos:show to false.
 		}
 		else {
 			set submode to m_circle.
-			set vecs[vd_pos]:show to true.
+			set vd_pos:show to true.
 		}
 		set modeString to "landing".
 		
@@ -430,7 +404,7 @@ function setMode {
 		set modeString to "manual".
 		set targetPitch to 0.
 		set targetHeading to round(headingOf(ship:facing:vector),2).
-		set vecs[vd_pos]:show to false.
+		set vd_pos:show to false.
 	}
 	else if mode = m_takeoff {
 		set submode to m_takeoff.
@@ -441,7 +415,7 @@ function setMode {
 		set submode to m_circle.
 		set modeString to "circling".
 		set circleLoc to ship:geoposition.
-		set vecs[vd_pos]:show to true.
+		set vd_pos:show to true.
 	}
 	else if mode = m_waypoints {
 		set submode to m_circle.
@@ -452,7 +426,7 @@ function setMode {
 		set wp_lat to round(waypoints[0]:lat,4).
 		set wp_lng to round(waypoints[0]:lng,4).
 		set controlAlt to true.
-		set vecs[vd_pos]:show to true.
+		set vd_pos:show to true.
 		set vd_waypoint_active:show to true.
 	}
 }
@@ -700,19 +674,19 @@ local showVecsVar is true.
 function showVecs {
 	parameter b.
 	
-	if vecs[vd_vel]:show and not(b) {
-		set vecs[vd_vel]:show to false.
-		set vecs[vd_st]:show to false.
-		set vecs[vd_facing]:show to false.
-		set vecs[vd_roll]:show to false.
-		if not(showVecsVar) set vecs[vd_stTarget]:show to false.
+	if vd_vel:show and not(b) {
+		set vd_vel:show to false.
+		set vd_st:show to false.
+		set vd_facing:show to false.
+		set vd_roll:show to false.
+		if not(showVecsVar) set vd_stTarget:show to false.
 	}
-	else if not(vecs[vd_vel]:show) and b {
-		set vecs[vd_vel]:show to true.
-		set vecs[vd_st]:show to true.
-		set vecs[vd_facing]:show to true.
-		set vecs[vd_roll]:show to true.
-		set vecs[vd_stTarget]:show to true.
+	else if not(vd_vel:show) and b {
+		set vd_vel:show to true.
+		set vd_st:show to true.
+		set vd_facing:show to true.
+		set vd_roll:show to true.
+		set vd_stTarget:show to true.
 	}
 }
 
@@ -744,8 +718,9 @@ until done {
 	//local shipHeading is headingOf(hVel).
 	
 	if activeMenu = editRunwayMenu {
-		set vd_runway_edit:start to runways[editRunwayI][1]:position + upVec * 10.
-		set vd_runway_edit:vec to (runways[editRunwayI][2]:position + upVec * 10) - vd_runway_edit:start.
+		local runway_edit_upvec is (runways[editRunwayI][1]:position-body:position):normalized * 10.
+		set vd_runway_edit:start to runways[editRunwayI][1]:position + runway_edit_upvec.
+		set vd_runway_edit:vec to (runways[editRunwayI][2]:position + runway_edit_upvec) - vd_runway_edit:start.
 		
 		for i in range(0,vd_waypoint_list:length,1) {
 			set vd_waypoint_list[i]:show to true.
@@ -756,7 +731,7 @@ until done {
 		if runway_normal_check > vd_runway_edit:vec:mag set runway_normal_check to 0.
 		set runway_normal_check to runway_normal_check + 5.
 		
-		local runwayAverageNormal is vxcl(vd_runway_edit:vec,upVec).
+		local runwayAverageNormal is vxcl(vd_runway_edit:vec,runway_edit_upvec).
 		local normalVecPos is body:geopositionof(vd_runway_edit:start + vd_runway_edit:vec:normalized * runway_normal_check).
 		local normalVec is geo_normalvector(normalVecPos,15).
 		
@@ -800,7 +775,7 @@ until done {
 			set circleLoc to body:geopositionof(vcrs(upVec,runwayVec):normalized * circleRadius).
 			set clockwise to true.
 			
-			set vecs[vd_pos]:show to true.
+			set vd_pos:show to true.
 		}
 		
 	}
@@ -817,7 +792,7 @@ until done {
 		if submode = m_manual or (vang(vxcl(upVec,pos1),hVel) < 5 and vang(hVel,runwayVec) < 45 and altitude-targetAlt < 500 and pos1dist < (300 + circleForwardOffset)) {
 			if submode = m_circle {
 				set submode to m_manual.
-				set vecs[vd_pos]:show to false.
+				set vd_pos:show to false.
 				ag10 on. //flaps
 			}
 			set controlAlt to false.
@@ -932,13 +907,13 @@ until done {
 		else if waypoints:length = 1 set circleRadius to landingRadius * 2.
 		else {
 			
-			if vxcl(upVec,waypoints[0]:position):mag < (0.75 * landingRadius) waypoints:remove(0).
+			if vxcl(upVec,waypoints[0]:position):mag < (2.2 * landingRadius) waypoints:remove(0).
 			set circleRadius to 1.
 		}
 		set circleLoc to waypoints[0].
 	}
 	
-	if submode = m_circle {
+	if submode = m_circle { //<-this must not be an else-if!
 		if kuniverse:activevessel = ship and mode <> m_land {
 			if hasTarget set tarVessel to target.
 			else set tarVessel to ship.
@@ -964,23 +939,17 @@ until done {
 		
 		set targetHeading to headingOf(targetHeadingVec).
 		
-		set vecs[vd_pos]:start to circleLoc:position.
-		set vecs[vd_pos]:vec to upVec * max(300,altitude - circleLoc:terrainheight).
-		print "r dist: " + round(centerPos:mag) + "m   " at (round(terminal:width*0.5),terminal:height-2).
+		set vd_pos:start to circleLoc:position.
+		set vd_pos:vec to upVec * 500.
+		print "center dist: " + round(centerPos:mag) + "m   " at (1,terminal:height-1).
 	}
 	//<<
 	
 	
 	// ### ALT ###
 	if controlAlt {
-		//set targetPitch to climbPid:update(time:seconds, (altitude + verticalspeed * 0.5) - targetAlt). 
-		
 		local altError is targetAlt - altitude.
-		
 		local desiredVV is max(-airspeed,min(airspeed,altError / 10)).
-		
-		//set verticalTarget to min(50,max(-50,(targetAlt - altitude)*0.3)).
-		//set targetPitch to min(targetPitch + 0.1,max(targetPitch - 0.1,climbPid:update(time:seconds, verticalspeed - desiredVV))). 
 		
 		set targetPitch to 90 - arccos(desiredVV/max(0.1,airspeed)).
 		set targetPitch to min(maxClimbAngle,max(-25,targetPitch)).
@@ -1025,13 +994,10 @@ until done {
 			set targetPitch to max(targetPitch,terrainClimb).
 		}
 	}
-	//else {
-	//	set targetAlt to round(altitude,1).
-	//}
 	
 	// ### HEADING ###
 	set stTarget to heading(targetHeading,targetPitch):vector.
-	set vecs[vd_stTarget]:vec to stTarget:normalized * 40.
+	set vd_stTarget:vec to stTarget:normalized * 40.
 	local hStTarget is vxcl(upVec,stTarget).
 	
 	//if updateCam faceCamTo(hStTarget). //update camera position if heading was manually changed
@@ -1046,56 +1012,32 @@ until done {
 	
 	local velPitch is 90 - vang(upVec,vel).
 	
-	if bankHard and compassError > -20 { //not used at the moment
+	local attackAngle is 10 + attackPid:update(time:seconds, velPitch - targetPitch). 
+	set stNormal to vcrs(vel,stTarget).
+	set st to angleaxis(min(attackAngle,vang(vel,stTarget)),stNormal) * vel.
+	
+	local pitchError is velPitch - targetPitch.
+	//if abs(pitchError) > 5 pitchPid:reset().
+	local pitchAdjust is pitchPid:update(time:seconds, pitchError * cos(abs(getBank()))) .
+	set st to angleaxis(pitchAdjust,vcrs(hVel,upVec)) * st.
+
+	//roll w/ no pid
+	//local stRoll is min(maxBank,vang(hVel,hStTarget) * 1.5).
+	//if vdot(vcrs(upVec,hVel),stTarget) > 0 set stRoll to -stRoll.
+	
+	//### roll with pid
+	if alt:radar < 12 set st to lookdirup(st,upVec).
+	else  {
+		local bankCap is min(maxBank,maxBank + 10 - abs(pitchError)^1.4).
+		set bankPid:maxoutput to max(5,min(bankCap,maxBank * (forwardSpeed - stallSpeed)/(maxBankSpeed-stallSpeed))).
+		set bankPid:minoutput to -bankPid:maxoutput.
+		
 		if vdot(vcrs(upVec,hVel),hStTarget) > 0 set compassError to -compassError.
+		set stRoll to bankPid:update(time:seconds, -compassError * bankFactor * max(0.05,min(1,(forwardSpeed - stallSpeed)/(maxBankSpeed-stallSpeed))) ).  
 		
-		set stNormal to vcrs(vel,stTarget).
-		set st to angleaxis(min(15,vang(vel,stTarget)),stNormal) * vel.
-		
-		set stRoll to 90 + bankHardPid:update(time:seconds, targetPitch - velPitch ).
-		if compassError < 0 set stRoll to -stRoll.
-		
-		local rollVector is angleaxis(stRoll,shipfacing) * upVec.
+		local rollVector is angleaxis(stRoll,shipFacing) * vxcl(shipFacing,upVec).
+		set vd_roll:vec to rollVector:normalized * 5.
 		set st to lookdirup(st,rollVector).
-	}
-	else {
-		local attackAngle is 10 + attackPid:update(time:seconds, velPitch - targetPitch). 
-			print "st attack ang: " + round(attackangle,2) + "   " at (1,terminal:height-2).
-		set stNormal to vcrs(vel,stTarget).
-		set st to angleaxis(min(attackAngle,vang(vel,stTarget)),stNormal) * vel.
-		
-		print "bank ang: " + round(getBank(),2) + "   " at (1,terminal:height-3).
-		local pitchError is velPitch - targetPitch.
-		//if abs(pitchError) > 5 pitchPid:reset().
-		local pitchAdjust is pitchPid:update(time:seconds, pitchError * cos(abs(getBank()))) .
-		set st to angleaxis(pitchAdjust,vcrs(hVel,upVec)) * st.
-		
-		//local aoaLimit is aoaHigh.
-		//if vang(vel,st) > aoaLimit {
-		//	set stNormal to vcrs(vel,st).
-		//	set st to angleaxis(aoaLimit,stNormal) * vel.
-		//}
-		
-		//roll w/ no pid
-		//local stRoll is min(maxBank,vang(hVel,hStTarget) * 1.5).
-		//if vdot(vcrs(upVec,hVel),stTarget) > 0 set stRoll to -stRoll.
-		
-		//### roll with pid
-		if alt:radar < 12 set st to lookdirup(st,upVec).
-		else  {
-			local bankCap is min(maxBank,maxBank + 10 - abs(pitchError)^1.4).
-			set bankPid:maxoutput to max(5,min(bankCap,maxBank * (forwardSpeed - stallSpeed)/(maxBankSpeed-stallSpeed))).
-			set bankPid:minoutput to -bankPid:maxoutput.
-			
-			if vdot(vcrs(upVec,hVel),hStTarget) > 0 set compassError to -compassError.
-			set stRoll to bankPid:update(time:seconds, -compassError * bankFactor * max(0.05,min(1,(forwardSpeed - stallSpeed)/(maxBankSpeed-stallSpeed))) ).  
-			print "req bank: " + round(stRoll,2) + "   " at (1,terminal:height-4).
-			
-			
-			local rollVector is angleaxis(stRoll,shipFacing) * vxcl(shipFacing,upVec).
-			set vecs[vd_roll]:vec to rollVector:normalized * 5.
-			set st to lookdirup(st,rollVector).
-		}
 	}
 	
 	//### wheelsteer
@@ -1133,9 +1075,9 @@ until done {
 	}
 	
 	// Vecs >>
-	set vecs[vd_vel]:vec to vel:normalized * 40.
-	set vecs[vd_st]:vec to st:vector:normalized * 40.
-	set vecs[vd_facing]:vec to shipfacing * 40.
+	set vd_vel:vec to vel:normalized * 40.
+	set vd_st:vec to st:vector:normalized * 40.
+	set vd_facing:vec to shipfacing * 40.
 	
 	
 	// <<
