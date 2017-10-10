@@ -83,6 +83,7 @@ lock throttle to th.
 	local heightOffset is 3.
 	local descentAngle is 5.
 	local maxClimbAngle is 20.
+	local airbrakes is false.
 	if ship:status = "Landed" or ship:status = "PRELAUNCH" set heightOffset to round(alt:radar,2).
 	
 	//terrain checks:
@@ -96,7 +97,7 @@ lock throttle to th.
 	local accLast is v(0,0,0.1).
 	local oldTime is time:seconds - 0.02.
 	local lastTerrainClimb is 0.
-	local terrainVecs is true.
+	local terrainVecs is false.
 	
 	local vd_stTarget is vecdraw(v(0,0,0),v(0,0,0),green,"",1,true,0.2).
 	local vd_st is vecdraw(v(0,0,0),v(0,0,0),magenta,"",1,true,0.2).
@@ -104,7 +105,7 @@ lock throttle to th.
 	local vd_vel is vecdraw(v(0,0,0),v(0,0,0),rgba(0,1,0,0.2),"",1,true,0.2).
 	local vd_roll is vecdraw(v(0,0,0),v(0,0,0),cyan,"",1,true,0.2).
 	
-	set vd_terrainlist to list().
+	local vd_terrainlist is list().
 	function createTerrainVecdraws {
 		showTerrainVecdraws(false).
 		set vd_terrainlist to list().
@@ -137,7 +138,8 @@ lock throttle to th.
 			"landingRadius",landingRadius,
 			"heightOffset",heightOffset,
 			"descentAngle",descentAngle,
-			"maxClimbAngle",maxClimbAngle
+			"maxClimbAngle",maxClimbAngle,
+			"airbrakes",airbrakes
 		).
 		
 		local filePath is path("0:/json/" + ship:name + "/autopilot.json").
@@ -158,6 +160,7 @@ lock throttle to th.
 			if lex:haskey("heightOffset") set heightOffset to lex["heightOffset"].
 			if lex:haskey("descentAngle") set descentAngle to lex["descentAngle"].
 			if lex:haskey("maxClimbAngle") set maxClimbAngle to lex["maxClimbAngle"].
+			if lex:haskey("airbrakes") set airbrakes to lex["airbrakes"].
 			
 			HUDTEXT("Loaded vessel settings from " + filePath,15,2,25,cyan,false).
 			return true.
@@ -474,9 +477,10 @@ set waypointsMenu to list(
 	list("New waypoint:",	"text"),
 	list("Latitude:",	"number", 	{ parameter p is sv. if p <> sv set wp_lat to min(90,max(-90,round(p,4))). return wp_lat. }, 0.1),
 	list("Longitude:",	"number", 	{ parameter p is sv. if p <> sv set wp_lng to min(180,max(-180,round(p,4))). return wp_lng. }, 0.1),
-	list("[Add]", 		"action", { waypoints:add(latlng(wp_lat,wp_lng)). }),
+	list("[+] Add WP", 		"action", { waypoints:add(latlng(wp_lat,wp_lng)). }),
 	list("",						"text"),
 	list("Waypoints left:",			"display", { return waypoints:length. }),
+	list("[-] Skip to next", 		"action", { if waypoints:length > 1 waypoints:remove(0). }),
 	list("-",				"line"),
 	list("Mountain Tour", 		"action", { set waypoints to list(). 
 											waypoints:add(LATLNG(-0.0288843395763714,-78.3836648093183)).
@@ -571,6 +575,7 @@ set settingsMenu to list(
 	//list(name,type,get/set function,increment multiplier (for numbers)).
 
 	list("Stall Spd:",		"number", 	{ parameter p is sv. if p <> sv set stallSpeed to max(5,round(p)). return stallSpeed. }, 1),
+	list("Airbrakes in flight:","bool", { parameter p is sv. if p <> sv set airbrakes to boolConvert(p). return airbrakes. }),
 	list("Max Climb Angle:","number", 	{ parameter p is sv. if p <> sv set maxClimbAngle to max(5,round(p,1)). return maxClimbAngle. }, 0.1),
 	list("",				"text"),
 	list("Bank limit:",		"number", 	{ parameter p is sv. if p <> sv { set maxBank to max(10,round(p)). set bankPid to init_bank_pid(). } return maxBank. }, 10),
@@ -648,7 +653,6 @@ function findRunway {
 
 function geo_normalvector {
 	parameter geopos,size_.
-	set size to max(5,size_).
 	local center is geopos:position.
 	local fwd is vxcl(center-body:position,body:angularvel):normalized.
 	local right is vcrs(fwd,center-body:position):normalized.
@@ -707,8 +711,6 @@ until done {
 	local shipfacing is ship:facing:vector.
 	local vel is velocity:surface.
 	set forwardSpeed to vdot(shipfacing,vel).
-	set th to throtPid:Update(time:seconds, forwardSpeed - targetSpeed).
-	
 	
 	set upVec to up:vector.
 	local hVel is vxcl(upVec,vel).
@@ -921,7 +923,7 @@ until done {
 		if tarVessel <> ship and mode <> m_land set circleLoc to tarVessel:geoposition.
 		local centerPos is vxcl(upVec,circleLoc:position).
 		//faceCamTo(centerPos).
-		local currentRadius is centerPos:mag.
+		set currentRadius to centerPos:mag.
 		
 		local sign is 1.
 		if clockwise set sign to -1.
@@ -945,6 +947,15 @@ until done {
 	}
 	//<<
 	
+	// ### Abort ###
+	if abort {
+		abort off.
+		setmode(m_waypoints).
+		set targetAlt to altitude + 1000.
+		set targetSpeed to maxBankSpeed.
+		HUDTEXT("!!! PANIC !!!",10,2,30,red,false).
+	}
+	
 	
 	// ### ALT ###
 	if controlAlt {
@@ -960,10 +971,14 @@ until done {
 			set dT to time:seconds - oldTime.
 			set oldTime to time:seconds.
 			
+			local hTargeVec is heading(targetHeading,0):vector.
+			
 			local velAngRot is min(45,vang(vel,velLast) / dT). //how much degrees we should rotate the accel vector between steps
 			local velRotAxis is vcrs(velLast,vel).  //the axis that we should rotate the acc vec around
+			local wrongWay is vdot(vxcl(vel,vel - velLast),hTargeVec) < 0.
 			set velLast to vel.
-			local velTemp is angleaxis(velAngRot * timeIncrement * 0.5,velRotAxis) * vel.
+			
+			local velTemp is angleaxis(velAngRot * timeIncrement * 0.5,velRotAxis) * hVel.
 			local posTemp is v(0,0,0).
 
 			local terrainClimb is -90.
@@ -971,14 +986,27 @@ until done {
 			
 			local heightMarginVec is upVec * heightMargin.
 			
-			for i in range(steps) {
-				
-				set posTemp to posTemp + velTemp * timeIncrement.
-				set velTemp to angleaxis(velAngRot * timeIncrement,velRotAxis) * velTemp.
-				
-				
 			
+			
+			
+			for i in range(steps) {
+				set posTemp to posTemp + velTemp * timeIncrement.
 				
+				if wrongWay { set velTemp to vel. } //currectly accelerating the wrong way
+				else if submode = m_circle and currentRadius/circleRadius < 1.5 {
+					set velTemp to angleaxis(velAngRot * timeIncrement,velRotAxis) * velTemp.
+				}	
+				else {				
+					local hVelTemp is vxcl(upVec,velTemp).
+					
+					if vdot(velRotAxis,vcrs(hVelTemp,hTargeVec)) > 0 {
+						set velTemp to angleaxis(velAngRot * timeIncrement,velRotAxis) * velTemp.
+						
+						//if this makes it turn too much, just set velTemp to the target vel (end the turn)
+						if vdot(velRotAxis,vcrs(vxcl(upVec,velTemp),hTargeVec)) < 0 set velTemp to hTargeVec * velTemp:mag.
+					}
+					else set velTemp to hTargeVec * velTemp:mag.
+				}
 				
 				local terrainPos is body:geopositionof(posTemp):position.
 				if terrainVecs set vd_terrainlist[i]:start to terrainPos.
@@ -1070,9 +1098,13 @@ until done {
 		if showVecsVar showVecs(true).
 		set ship:control:wheelsteer to 0.
 		
-		if (forwardSpeed - targetSpeed) > 10 brakes on.
-		else brakes off.
+		if airbrakes {
+			if (forwardSpeed - targetSpeed) > 10 brakes on.
+			else brakes off.
+		}
 	}
+	
+	set th to throtPid:Update(time:seconds, forwardSpeed - targetSpeed).
 	
 	// Vecs >>
 	set vd_vel:vec to vel:normalized * 40.
