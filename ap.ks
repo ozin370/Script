@@ -412,6 +412,8 @@ function setMode {
 	else if mode = m_takeoff {
 		set submode to m_takeoff.
 		set modeString to "take-off".
+		set runwayStart to selectedRunway[1].
+		set runwayEnd to selectedRunway[2].
 		findRunway().
 	}
 	else if mode = m_circle {
@@ -694,6 +696,17 @@ function showVecs {
 	}
 }
 
+function updateRunwayPos {
+	if runwayStart:terrainheight < 0 set pos1 to runwayStart:altitudeposition(heightOffset).
+	else set pos1 to runwayStart:position + heightOffsetVec.
+	set pos1dist to vxcl(upVec,pos1):mag.
+	
+	if runwayEnd:terrainheight < 0 set pos2 to runwayEnd:altitudeposition(heightOffset).
+	else set pos2 to runwayEnd:position + heightOffsetVec.
+	set runwayVec to pos2-pos1.
+	set runwayVecNormalized to runwayVec:normalized.
+}
+
 set tarVessel to ship.
 local done is false.
 drawAll(). wait 0.
@@ -721,8 +734,11 @@ until done {
 	
 	if activeMenu = editRunwayMenu {
 		local runway_edit_upvec is (runways[editRunwayI][1]:position-body:position):normalized * 10.
-		set vd_runway_edit:start to runways[editRunwayI][1]:position + runway_edit_upvec.
-		set vd_runway_edit:vec to (runways[editRunwayI][2]:position + runway_edit_upvec) - vd_runway_edit:start.
+		
+		if runways[editRunwayI][1]:terrainheight < 0 set vd_runway_edit:start to runways[editRunwayI][1]:altitudeposition(10).
+		else set vd_runway_edit:start to runways[editRunwayI][1]:position + runway_edit_upvec.
+		if runways[editRunwayI][2]:terrainheight < 0 set vd_runway_edit:vec to runways[editRunwayI][2]:altitudeposition(10) - vd_runway_edit:start.
+		else set vd_runway_edit:vec to (runways[editRunwayI][2]:position + runway_edit_upvec) - vd_runway_edit:start.
 		
 		for i in range(0,vd_waypoint_list:length,1) {
 			set vd_waypoint_list[i]:show to true.
@@ -748,12 +764,9 @@ until done {
 	//>> ### Mode specific stuff 
 	if mode = m_takeoff {
 		set controlAlt to false.
-		local pos1 is selectedRunway[1]:position + heightOffsetVec.
-		local pos1dist is vxcl(upVec,pos1):mag.
-		local pos2 is selectedRunway[2]:position + heightOffsetVec.
-		local runwayVec is vxcl(upVec,pos2-pos1).
-		local runwayVecNormalized is runwayVec:normalized.
-		local side_dist is abs(vdot(vcrs(runwayVec,upVec):normalized, selectedRunway[1]:position)).
+		updateRunwayPos().
+		
+		local side_dist is abs(vdot(vcrs(runwayVec,upVec):normalized, pos1)).
 		
 		local offset is vdot(-runwayVecNormalized,pos1).
 		local aimPosHeading is pos1 + runwayVecNormalized * (offset + max(0,groundspeed * 5 - side_dist/4)).
@@ -782,16 +795,11 @@ until done {
 		
 	}
 	else if mode = m_land {
-		//selectedRunway(namestr,geo1,geo2)
+		updateRunwayPos().
 		
-		local pos1 is runwayStart:position + heightOffsetVec.
-		local pos1dist is vxcl(upVec,pos1):mag.
-		local pos2 is runwayEnd:position + heightOffsetVec.
-		local runwayVec is pos2-pos1.
-		local runwayVecNormalized is runwayVec:normalized.
 		local circleForwardOffset is landingRadius + 800 + 20 * maxBankSpeed.
 		
-		if submode = m_manual or (vang(vxcl(upVec,pos1),hVel) < 5 and vang(hVel,runwayVec) < 45 and altitude-targetAlt < 500 and pos1dist < (300 + circleForwardOffset)) {
+		if submode = m_manual or (vang(vxcl(upVec,pos1),hVel) < 5 and vang(hVel,runwayVec) < 45 and altitude-targetAlt < 500 and pos1dist < (500 + circleForwardOffset)) {
 			if submode = m_circle {
 				set submode to m_manual.
 				set vd_pos:show to false.
@@ -803,14 +811,14 @@ until done {
 			
 			
 			
-			local aimPosHeading is pos1 + runwayVecNormalized * max(-2500,offset + max(15,groundspeed * 6)).
+			local aimPosHeading is pos1 + runwayVecNormalized * max(-3000,offset + max(15,groundspeed * 6)).
 			
-			local pitchPosOffset is offset + 200 * (stallSpeed/50).
+			local pitchPosOffset is offset + 200 * (groundspeed/50).
 			
 			if pitchPosOffset < 0 set runwayVecNormalized to angleaxis(descentAngle,vcrs(upVec,runwayVecNormalized)) * runwayVecNormalized.
 			local aimPosPitch is pos1 + runwayVecNormalized * pitchPosOffset.
 			
-			if pitchPosOffset > 0 set aimPosPitch to body:geopositionof(aimPosPitch):position + heightOffsetVec.
+			if pitchPosOffset > 0 and runwayStart:terrainheight >= 0 set aimPosPitch to body:geopositionof(aimPosPitch):position + heightOffsetVec.
 			
 			set targetPitch to 90 - vang(aimPosPitch,upVec).
 			if pitchPosOffset > 0 set targetPitch to min(90 - vang(runwayVec,upVec) - 1,targetPitch).
@@ -818,7 +826,7 @@ until done {
 			set targetHeading to headingOf(aimPosHeading).
 			
 			
-			if ship:status = "landed" { 
+			if ship:status = "landed" or ship:status = "splashed" { 
 				set targetPitch to 0.
 				set targetSpeed to 0. 
 				
@@ -862,13 +870,13 @@ until done {
 				else set clockwise to false.
 				
 				set circleRadius to landingRadius.
-				local turnCenter is pos1 - runwayVecNormalized * circleForwardOffset + sideVec:normalized * circleRadius.
+				local turnCenter is pos1 - runwayVecNormalized * circleForwardOffset + sideVec:normalized * (circleRadius + 25).
 				set circleLoc to body:geopositionof(turnCenter).
 				
 				set runLandingSetup to false.
 			}
 			
-			local runwayAlt is runwayStart:terrainheight.
+			local runwayAlt is max(0,runwayStart:terrainheight).
 			
 			local glideVec is -runwayVecNormalized * circleForwardOffset.
 			set glideVec to angleaxis(descentAngle,vcrs(pos1UpVec,runwayVecNormalized)) * glideVec.
@@ -1076,7 +1084,6 @@ until done {
 		local wheelError is vang(vxcl(upVec,shipfacing),hStTarget).
 		if vdot(ship:facing:starvector,hStTarget) < 0 set wheelError to -wheelError.
 		
-		//set wheelPid to PIDLOOP(0.15, 0.000, 0.1, -1, 1).
 		set wheelPid:kP to 0.015 / max(1,groundspeed/10).
 		set wheelPid:kD to wheelPid:kP * (2/3).
 		set ship:control:wheelsteer to wheelPid:update(time:seconds, wheelError).
