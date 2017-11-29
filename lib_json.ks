@@ -37,7 +37,7 @@ function load_json {
 		else if lex["agressiveChase"] = "False" set agressiveChase to false.
 		
 		global speedlimitmax is lex["speedlimitmax"].
-		backlog:add("Config file was loaded.").
+		entry("Config file was loaded.").
 	}
 	//switch to 0.
 }

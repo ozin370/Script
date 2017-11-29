@@ -6,6 +6,49 @@ function dummy {
 	lock throttle to th.
 }
 
+
+
+function initializeTrigger { //called once by quad.ks right before flightcontroller()
+	
+	
+	
+	when focused then {
+		inputs(). //check for user input 
+		return true.
+	}
+	
+	if hasGimbal { //turret stuff
+		runoncepath("turret.ks").
+		set tOld2 to time:seconds - 0.02.
+	}
+	
+	when true then {
+	
+		set shipFacing to facing:vector.
+		set shipVelocitySurface to velocity:surface.
+		
+		
+		
+		// ##############
+		// ### Turret ###
+		// >>
+		if hasGimbal { // gimbal camera (hull cam) 
+			set dT2 to max(0.02,time:seconds - tOld2).
+			set tOld2 to time:seconds.
+			
+			set v_dif to (shipVelocitySurface - velold)/dT2.
+			set velold to shipVelocitySurface.
+	
+			set h_acc to vxcl(upVector, v_dif).
+			set v_acc to vdot(upVector, v_dif).
+			
+			updateGimbal().
+		}
+		
+		return true.
+	}
+}
+
 function flightcontroller {
 	// <<
 	if hasPort { // IS DOCKED CHECK
@@ -18,9 +61,8 @@ function flightcontroller {
 	// ### THRUST AND STUFF ###
 	// >>
 	set totalThrust to v(0,0,0).
-	set i to 0. until i = engs:length { //engine vecdraws and thrust vector
-		local thrust is engs[i]:facing:vector * engs[i]:thrust.
-		set totalThrust to totalThrust + thrust.
+	set i to 0. until i = 4 { //engine vecdraws and thrust vector
+		set totalThrust to totalThrust + engs[i]:facing:vector * engs[i]:thrust.
 		
 		if thMark {
 			set engineThrustLimitList[i] to engineThrustLimitList[i] * 0.8 + (th * (engs[i]:thrustlimit/100)) * 0.2. 
@@ -35,8 +77,7 @@ function flightcontroller {
 	//engs along topvec:  pitch
 	
 	
-	set shipFacing to facing:vector.
-	set shipVelocitySurface to velocity:surface.
+	
 	
 	// #################
 	// ### SLOW TICK ###
@@ -45,11 +86,9 @@ function flightcontroller {
 	if time:seconds > slowTimer + 1 or (forceUpdate and not(isDocked)) {
 		if KUniverse:activevessel = ship and not(focused) {
 			set focused to true.
-			if not(forceUpdate) console_init().
 		}
 		else if not(KUniverse:activevessel = ship) and focused {
 			set focused to false.
-			if not(forceUpdate) console_init().
 		}
 		
 		set slowTimer to time:seconds.
@@ -59,7 +98,7 @@ function flightcontroller {
 		
 		if not(isDocked) {
 			set upVector to up:vector.
-			set gravityMag to body:mu / body:position:mag^2.
+			set gravityMag to body:mu / body:position:sqrmagnitude.
 			set gravity to -upVector * gravityMag.
 		
 			set maxThr to ship:maxthrustat(1).
@@ -72,9 +111,15 @@ function flightcontroller {
 			
 			
 			//max tilt stuff
-			//set marginAngle to min(8,max(1.5,15/TWR)). //min(8,max(2,10/TWR)).
-			set maxNeutTilt to arccos(gravityMag / maxTWR). // - marginAngle.
-			set maxHA to sin(maxNeutTilt) * maxTWR.
+			if hasGimbal set maxNeutTilt to 60.
+			else set maxNeutTilt to arccos(gravityMag / maxTWR). 
+			
+			if hasGimbal {
+				set curMaxVAcc to vdot(upVector,angleaxis(maxNeutTilt,vcrs(upVector,north:vector)) * (upVector * maxTWR)).
+				set maxHA to sin(maxNeutTilt) * maxTWR * (gravityMag / curMaxVAcc).
+			}
+			
+			else set maxHA to sin(maxNeutTilt) * maxTWR.
 			
 			if shipVelocitySurface:mag < 80 set sampleInterval to 0.2.
 			else set sampleInterval to 0.1.
@@ -90,7 +135,7 @@ function flightcontroller {
 	// ### Fuel stuff and autodocking ###
 	// >>
 	if hasPort {
-		if (fuel < 25 or brakes) and charging = false and isDocked = false and (autoFuel or brakes) and (mode <> m_race or gateI = 0) {
+		if (fuel < 30 or brakes) and charging = false and isDocked = false and (autoFuel or brakes) and (mode <> m_race or gateI = 0) {
 			brakes off.
 			setLights(1,0.2,0.2).
 			set targetPort to ship:rootpart.
@@ -149,21 +194,17 @@ function flightcontroller {
 				//set tarPart:tag to "X".
 				set charging to true.
 				if fuel < 25 {
-					backlog:add("WARNING: Low on power!").
+					entry("WARNING: Low on power!").
 					warning("WARNING: Low on power!").
 				}
-				backlog:add("Autodocking to nearby port..").
+				entry("Autodocking to nearby port..").
 				popup("Autodocking to nearby port..").
 				setLights(1,1,0).
-				console_init().
 			}
 		}
 		if isDocked {
 			
 			set fuel to round((droneRes:amount/droneRes:capacity)*100).
-			//print "FUEL |                  |" at (c2,rd1 + 5).
-			horizontalLineTo(rd1 + 5,c2 + 5,c2 + 5 + round(18*(fuel/100)),"=").
-			//print "|" at (c2 + 5,rd1 + 5).
 			
 			if charging { //first tick as docked
 				unlock throttle.
@@ -193,8 +234,7 @@ function flightcontroller {
 				set charging to false.
 				wait 0.
 				//set targetPort:tag to "R".
-				backlog:add("Docked, recharging..").
-				console_init().
+				entry("Docked, recharging..").
 			}
 			if (fuel > 99 or autoFuel = false) and forceDock = false and time:seconds > minimumDockTime {
 				setLights(0,1,0).
@@ -214,10 +254,7 @@ function flightcontroller {
 					set tarPart to old_tarPart.
 				}
 				else set targetGeoPos to old_pos.
-				backlog:add("Undocking.").
-				console_init().
-				
-				
+				entry("Undocking.").
 				
 				kuniverse:forceactive(ship).
 				dronePod:controlfrom.
@@ -269,7 +306,6 @@ function flightcontroller {
 				set tarPart to old_tarPart.
 			}
 			else set targetGeoPos to old_pos.
-			console_init().
 		}
 	} // << ### end of fuel stuff
 	
@@ -287,7 +323,7 @@ function flightcontroller {
 			set relativeV to vxcl(upVector,tarVeh:velocity:surface) - h_vel.
 			
 			if tarVeh:loaded {
-				if tarPart = ship:rootpart { taggedPart(). console_init(). }  //target just got into range, look for part
+				if tarPart = ship:rootpart { taggedPart(). }  //target just got into range, look for part
 				set targetPart to tarPart.
 				if not(targetPart:ship = tarVeh) set tarVeh to targetPart:ship. //in case of docking/undocking, update vessel 
 			}
@@ -357,10 +393,10 @@ function flightcontroller {
 		if hasWinch {
 			set acc_expected to totalThrust/adjustedMass + gravity.
 			set v_acc_expected to vdot(upVector, acc_expected).
-			set v_acc_e_old to v_acc_expected.
+			//set v_acc_e_old to v_acc_expected.
 			
 			if shipVelocitySurface:mag < 0.5 and abs(throt - throtOld) < 0.01 { // and not(submode = m_land) {
-				set v_acc_difference to  v_acc_e_old - v_acc.
+				set v_acc_difference to  v_acc_expected - v_acc.
 				set acc_list[accI] to v_acc_difference.
 				if accI = 4 set accI to 0.
 				else set accI to accI + 1.
@@ -457,7 +493,7 @@ function flightcontroller {
 			}
 		}
 		
-		set tAlt to tAlt + tHeight.
+		set tAlt to max(minAlt,tAlt + tHeight).
 		set altErr to tAlt - altitude. //negative = drone above target height
 		set altErrAbs to abs(altErr).
 		// <<
@@ -491,7 +527,7 @@ function flightcontroller {
 		
 		
 		if submode = m_land and (h_vel_mag < 0.3 or not(ship:status = "FLYING")) {
-			if not(charging) { set desiredVV to min(-0.8,-sqrt( 2 * max(0.001,alt:radar-2) * acc_maxthr * 0.2 )). }
+			if not(charging) { set desiredVV to min(-0.5,-sqrt( 2 * max(0.001,alt:radar-2) * acc_maxthr * 0.1 )). }
 			else if charging { set desiredVV to vdot(upVector, tarPart:position - localPort:position) / 2. } 
 		}
 		else if altErrAbs < 1 set desiredVV to altErr*2.
@@ -510,6 +546,8 @@ function flightcontroller {
 		// ### DesiredHV (horizontal velocity) ####
 		// >>
 		
+		formationComUpdate().
+		
 		//set speedlimit to min(speedlimitmax,30*TWR).
 		
 		if submode = m_free {
@@ -526,11 +564,17 @@ function flightcontroller {
 		
 		
 		if submode = m_follow or (submode = m_land and charging) { 
-			set tarVel to vxcl(upVector,tarVeh:velocity:surface).
-			if agressiveChase set tarAcc to (tarVel - tarVelOld)/dT.
-			else set tarAcc to v(0,0,0).
-			set targetV to tarVel + tarAcc.
-			set tarVelOld to tarVel.
+			
+			if (time:seconds - formationLastUpdate < 0.5) {
+				set targetV to formationTarget[1].
+				set targetPosXcl to vxcl(upVector, targetPos) + formationTarget[2].
+				
+			}
+			else {
+				set tarVel to vxcl(upVector,tarVeh:velocity:surface).
+			
+				set targetV to tarVel.
+			}
 		}
 		else set targetV to v(0,0,0).
 		
@@ -540,7 +584,7 @@ function flightcontroller {
 		}
 		else if submode = m_land and not(charging) set desiredHV to v(0,0,0).
 		else if submode = m_follow and targetPosXcl:mag < 10 and not charging {
-			set rotationOffset to vcrs(targetPos,up:vector):normalized.
+			set rotationOffset to vcrs(targetPos,upVector):normalized.
 			//set targetPosXcl to targetPosXcl + rotationOffset * (vxcl(upVector,targetPos):mag *  max(0 , 1 - targetPosXcl:mag / 10)).
 			
 			set desiredHV to targetV + targetPosXcl:normalized * (targetPosXcl:mag^0.8) * (1 + (TWR - 4)/8).
@@ -549,11 +593,15 @@ function flightcontroller {
 				//else 
 			}
 		}
-		else if targetPosXcl:mag > 30 {
+		else if targetPosXcl:mag > 15 {
 			if submode = m_follow set approachSpeed to vdot(targetPosXcl:normalized,h_vel-targetV).
 			else set approachSpeed to vdot(targetPosXcl:normalized,h_vel).
+			
+			local maxSteeringVec is angleaxis(-maxNeutTilt, vcrs(upVector,targetPosXcl)) * upVector.
+			//set v2 to vecdraw(v(0,0,0),maxSteeringVec * 4,magenta,"maxHa: " + round(maxHA,1),1,true,0.2).
+			local angSteerError is vang(shipFacing,maxSteeringVec).
 
-			set desiredHV to targetV + targetPosXcl:normalized * sqrt( 2 * max(0.01,targetPosXcl:mag - approachSpeed) * (maxHA^0.95)). 
+			set desiredHV to targetV + targetPosXcl:normalized * sqrt( 2 * max(0.01,targetPosXcl:mag - max(0.5,angSteerError/(maxNeutTilt*2)) * approachSpeed * 2) * (maxHA^0.95)). 
 		}
 		//else if targetPosXcl:mag > 20 set desiredHV to targetV + targetPosXcl:normalized * (targetPosXcl:mag^0.8) * (1 + (TWR - 4)/10). 
 		else set desiredHV to targetV + targetPosXcl:normalized * (targetPosXcl:mag^0.85) * 0.6. 
@@ -573,14 +621,14 @@ function flightcontroller {
 			set side_acc to side_acc / max(1,min(2,altErrAbs/8)).  
 			
 			//find the steering vector where acceleration is at max  
-			local maxSteeringVec is angleaxis(90 - maxNeutTilt, -vcrs(upVector,-gateSideVec)) * -gateSideVec.
+			local maxSteeringVec is angleaxis(90 - maxNeutTilt, vcrs(upVector,gateSideVec)) * -gateSideVec. //angleaxis(90 - maxNeutTilt, -vcrs(upVector,-gateSideVec)) * -gateSideVec.
 			local angSteerError is vang(shipFacing,maxSteeringVec).
 			local adjustedDist is max(1,side_dist - (angSteerError/(2*maxNeutTilt)) * curSideSpeed * 1.5).
 			
-			local targetSideSpeed is min(side_dist^1.5,sqrt(2*max(0.01,adjustedDist - curSideSpeed*0.1)*side_acc)). //min(side_dist^1.5,sqrt(2*(adjustedDist^0.9)*side_acc)). 
+			local targetSideSpeed is min(side_dist^1.5,sqrt(2*max(0.01,adjustedDist - curSideSpeed*0.15)*side_acc)). //min(side_dist^1.5,sqrt(2*(adjustedDist^0.9)*side_acc)). 
 			local side_acc_duration is max(0.01,targetSideSpeed/side_acc).
 			
-			if curSideSpeed < 0 { //drone is currently moving away from center line
+			if curSideSpeed < 0 { //drone is currently moving away from center line 
 				set side_acc_duration to side_acc_duration + abs(curSideSpeed)/side_acc.
 			}
 			//local side_acc_distance is (curSideSpeed * side_acc_duration) + (0.5 * side_acc * (side_acc_duration^2)).
@@ -668,13 +716,13 @@ function flightcontroller {
 			
 		if mode = m_follow { //and charging 
 			//error adjustment
-			if tarVel:mag > 10 {
-				if h_acc:mag < 0.5 and (h_vel - tarVel):mag < 1 {
+			if targetV:mag > 10 {
+				if h_acc:mag < 0.5 and (h_vel - targetV):mag < 1 {
 					set vMod to max(0, vMod + max(-2,min(2,vdot(desiredHV:normalized,stVec))) * 0.1 ).
 				}
-				set stVec to stVec + tarVel:normalized * vMod. 
+				set stVec to stVec + targetV:normalized * vMod. 
 			}
-			set vecs[markVMod]:vec to tarVel:normalized * vMod.
+			set vecs[markVMod]:vec to targetV:normalized * vMod.
 
 			
 			
@@ -691,6 +739,13 @@ function flightcontroller {
 			
 		// <<
 		
+		// ##########################################
+		// ### Formation Communications Broadcast ###
+		
+		if isLeading {
+			formationBroadcast(4,desiredHV,h_vel:normalized * -15).
+		}
+		
 		// ######################################## 
 		// ### targetVec & desired acceleration ###
 		// >>
@@ -706,6 +761,7 @@ function flightcontroller {
 		set PID_vAcc:minoutput to -maxTWR - gravityMag.
 		
 		set desiredVAccVal to PID_vAcc:update(time:seconds, -stVVec).
+		
 		
 		if desiredVAccVal < -gravityMag { 
 			//if mode = m_pos set desiredVAccVal to -gravityMag.
@@ -745,12 +801,11 @@ function flightcontroller {
 		
 		// ### Tilt Cap ###
 		
-		local targetVecTilt is vang(upVector,targetVec). 
-		local tiltCap is (desiredHAcc:mag / maxTWR) * 600. // 600
+		set targetVecTilt to vang(upVector,targetVec). 
+		if hasGimbal set tiltCap to min(vang(upVector,desiredHAcc - gravity),60). 
+		else set tiltCap to (desiredHAcc:mag / maxTWR) * 600. // 600
 		
-		if targetVecTilt > tiltCap and (altErr > -20 or mode = m_pos or doLanding) { //cap tilt
-		
-			//set targetVec to vxcl(upVector,targetVec):normalized. //temporary, hopefully 
+		if targetVecTilt > tiltCap and (altErr > -20 or mode = m_pos or doLanding or hasGimbal) { //cap tilt
 			set rotAx to -vcrs(targetVec, upVector).
 			set targetVec to upVector.
 			set targetVec to angleaxis(tiltCap, rotAx) * targetVec.
@@ -808,8 +863,8 @@ function flightcontroller {
 		
 		
 		if hasGimbal { //camera drone
-			set pitch_vel_target to pitch_vel_target * 0.5.
-			set roll_vel_target to roll_vel_target * 0.5.
+			set pitch_vel_target to pitch_vel_target * 0.6.
+			set roll_vel_target to roll_vel_target * 0.6.
 		}
 		else if doFlip {
 			set pitch_vel_target to pitch_vel_target * 5.
@@ -853,13 +908,14 @@ function flightcontroller {
 				set targetGeoPos to body:geopositionof(newPosition).
 			}
 		}
-		
-		else if submode = m_land {
-			//if charging and abs(vdot(upVector,(localPort:position - targetPort:position))) < 0.8 { set th to 0. unlock throttle. }
-		}
 		else if doLanding {
 			set freeSpeed to 0.
-			if h_vel_mag < 1 and abs(altErr) < 3 and abs(v_vel) < 0.5 { set submode to m_land. set mode to m_land. set doLanding to false.}
+			if h_vel_mag < 1 and abs(altErr) < 3 and abs(v_vel) < 0.5 { 
+				set submode to m_land. set mode to m_land. set doLanding to false.
+				for m in gearMods {
+					if m:hasaction("extend/retract") m:doaction("extend/retract",true).
+				}
+			}
 		}
 		// <<
 		
@@ -899,109 +955,63 @@ function flightcontroller {
 		// ### Terminal ###
 		// >>
 		set dTavg to dTavg * 0.95 + dT * 0.05.
-		print round(1/dTavg) + "hz" at (terminal:width-6,0).
-		if mode = m_race { }
-		else if focused and not showstats {
-			print tHeight + "m    " at (c3,3).
-			print round(speedlimit) + " m/s" at (c3,5).
-			print round(v_vel,1) + " m/s  " at (c3,rd2 + 2).
-			print round(h_vel_mag,1) + " m/s  " at (c3,rd2 + 3).
-			print round(alt:radar,1) + " m  " at (c3,rd2 + 5).
-			print round(altErr,1)+ " m  " at (c3,rd2 + 6).
+		set title_hz:text to round(1/dTavg) + "hz".
+		
+		if box_all:visible {
+			if box_right:visible {
+				set g_speedlimit:text to round(speedlimit):tostring().
+				set g_groundpspeed_label_val:text to round(h_vel_mag) + "m/s".
+				set g_radar_label_val:text to round(alt:radar) + "m".
+				set g_height_error_label_val:text to round(altErr,1)+ "m".
+			
+			}
 			
 			if submode = m_free {
-				print round(freeHeading,1) + "  " at (c1,ld1+4).
-				print round(freeSpeed,1) + " m/s " at (c1,ld1+6).
+				set g_free_speed_label_val:text to round(freeSpeed,1) + " m/s".
+				set g_free_heading_label_val:text to round(freeHeading,1):tostring().
 			}
 			else if submode = m_follow {
-				print "Follow dist: " + round(followDist,1) + " m  " at (1,ld1 + 13).
-				print "Rot speed:   " + rotateSpeed + " m/s  " at (1,ld1 + 15).
-			}
-			else if mode = m_patrol {
-				print "Radius: " + round(patrolRadius) + " m   " at (1,ld1 + 3).
-				print "Speed : " + round(freeSpeed) + " m/s " at (1,ld1 + 4).
-				
+				set g_target_distance_label_val:text to round(tarVeh:distance) + "m".
 			}
 			
 			if time:seconds > consoleTimer + 0.5 {
-				//printQuad(c1,c2-4,ld1+4,ld1+12,"+").
 				if submode = m_hover or submode = m_free { }
 				else if submode = m_land { }
 				else if mode = m_race { }
-				else {
+				else if mode = m_pos {
 					local distTarget is round(targetPosXcl:mag,2).
-					if distTarget > 1000 print round((distTarget / 1000),1) + " km  " at (c1,ld1 + 7).
-					else print distTarget + " m  " at (c1,ld1 + 7).
-					print round(vdot(upVector,targetPos),2) + " m  " at (c1,ld1 + 8).
-					print round(targetGeoPos:lat,2) + " " at (5,ld1 + 10).
-					print round(targetGeoPos:lng,2) + " " at (15,ld1 + 10).
-					print round(targetGeoPos:heading,1) + "    " at (c1,ld1 + 11).
+					if distTarget > 1000 set g_pos_distance:text to "Distance: " + round((distTarget / 1000),1) + " km".
+					else set g_pos_distance:text to "Distance: " + distTarget + " m".
+					
+					set g_pos_lat:text to "Latitude: " + round(targetGeoPos:lat,2).
+					set g_pos_lng:text to "Longitude: " + round(targetGeoPos:lng,2).
+					set g_pos_hdg:text to "Heading: " + round(targetGeoPos:heading,1):tostring().
 				}
 				
 				//Stats
-				print "FUEL |                  |" at (c2,rd1 + 5).
-				horizontalLineTo(rd1 + 5,c2 + 5,c2 + 5 + round(18*(fuel/100)),"=").
-				print "|" at (c2 + 5,rd1 + 5).
-				print round(TWR,2) + "  " at (c3,rd1 + 7).
-				print round(mass,3) + " t " at (c3,rd1 + 9).
-				print round(adjustedMass - mass,3) + " t " at (c3,rd1 + 10). 
+				set title_fuel_text:text to round(fuel) + "%".
+				if fuel >= 50 set title_fuel_text:style:textcolor to rgb(0,1,0).
+				else set title_fuel_text:style:textcolor to rgb(1,fuel/50,0).
+				
+				
+				set g_TWR_label_val:text to round(TWR,2):tostring().
+				set g_mass_label_val:text to round(mass,3) + "t".
+				set g_payload_label_val:text to round(adjustedMass - mass,3) + "t". 
 				
 				//
 				set consoleTimer to time:seconds.
 			}
 		}
-		else if not showstats { //unfocused
-			print round(h_vel_mag) + "m/s  " at (7,3).
-			print round(fuel) + "%  " at (23,3).
-		}
-		else if focused and showstats { 
-			print " Speedlimit: " + round(speedlimitmax) + " m/s  " at (0,15).
+		else {
+			set title_fuel_text:text to round(fuel) + "%".
+			if fuel >= 50 set title_fuel_text:style:textcolor to rgb(0,1,0).
+			else set title_fuel_text:style:textcolor to rgb(1,fuel/50,0).
 		}
 		
 		// << ### terminal end ###
 		
 
-		// ##############
-		// ### Camera ###
-		// >>
-		if hasGimbal { // gimbal camera (hull cam)
-			
-			
-			
-			if submode <> m_follow {
-				//if h_vel_mag > 1 set focusPos to (desiredHV * 0 + shipVelocitySurface):normalized * 10000. 
-				set focusPos to (focusPos * 19 + velocity:surface) * 0.05.
-			}
-			//by default focusPos = expected position in 5s
-			else if submode = m_follow set focusPos to tarVeh:position.
-			//else if submode = m_race set focusPos to targetGatePos + upVector * tHeight.
-			set vertAngOffset to vang(vxcl(shipFacing,camRotV:facing:vector), vxcl(camRotV:facing:starvector,focusPos)).
-			set vertAngOffset to min(vertAngOffset,59.99).
-			if vdot(shipFacing, focusPos) < 0 set vertAngOffset to -vertAngOffset.
-			
-			set horAngOffset to vang(vxcl(shipFacing,camRotV:facing:vector), vxcl(shipFacing,focusPos)).
-			set horAngOffset to min(horAngOffset,59.99).  
-			if vdot(camRotV:facing:starvector, focusPos) < 0 set horAngOffset to -horAngOffset. 
-			
-			
-			print "vAng err: " + round(vertAngOffset,1) + "  " at (0,terminal:height-4).
-			print "hAng err: " + round(horAngOffset,1) + "  " at (0,terminal:height-3).
-			
-			if abs(horAngOffset) < 80 rotHMod:setfield("speed",min(10,(abs(horAngOffset)^0.9)*0.3)).
-			else rotHMod:setfield("speed",0).
-			rotVMod:setfield("speed",min(5,(abs(vertAngOffset)^0.9)*0.3)).
-			
-			//if round(vertAngOffset,1) < 0 and submode <> m_land rotVMod:doaction("move +",true).
-			//else if round(vertAngOffset,1) > 0 and submode <> m_land rotVMod:doaction("move -",true).
-			//else { rotVMod:doaction("move +",false). rotVMod:doaction("move -",false). }
-			
-			//if round(horAngOffset) < 0 and submode <> m_land rotHMod:doaction("move -",true).
-			//else if round(horAngOffset) > 0 and submode <> m_land rotHMod:doaction("move +",true).
-			//else { rotHMod:doaction("move +",false). rotHMod:doaction("move -",false). }
-			
-			servoV:moveto(vertAngOffset,1000).
-			servoH:moveto(horAngOffset,1000).
-		} 
+		
 		
 		
 		// <<
@@ -1010,30 +1020,25 @@ function flightcontroller {
 		// ### Yaw rotatron controls ###
 		// >>
 		if yawControl {
-			
 			set yawAngVel to vdot(shipFacing, angVel).
-			
-			
-			//if submode = m_land set targetRot to 0.
 			if ship:control:pilotroll > 0 set targetRot to 25 - th * 20.
 			else if ship:control:pilotroll < 0 set targetRot to -25 + (th * 20).
 			else {
-				if abs(yawAngVel) > 0.005 { 
-					set targetRot to min(40,abs(yawAngVel) * 20 * (5/TWR) * (1.25 - th)).   
+				if abs(yawAngVel) > 0.001 { 
+					set targetRot to min(40,abs(yawAngVel) * 10 * (5/TWR) * (1.25 - th)).   
 					if yawAngVel > 0 set targetRot to -targetRot.
 				}
 				else set targetRot to 0.
 			}
 			
 			for s in yawRotatrons {
-				
-				s:moveto(targetRot,100).
+				s:moveto(targetRot,25).
 			}
 			
 		} // <<
 	}
 	
-	//if tOld = time:seconds wait 0.03. 
-	//else wait 0.
-	wait 0.
+	//keep the thing running at 25hz
+	if tOld = time:seconds wait 0.03. 
+	else wait 0.
 }

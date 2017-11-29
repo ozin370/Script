@@ -106,6 +106,15 @@ function sortTargets {
 	return sorted.
 }
 
+function targetStrings {
+	parameter tgs. //list of vessels
+	local stringList is list("").
+	for t in tgs {
+		stringList:add(t:name).
+	}
+	return stringList.
+}
+
 // parameter 1: A string or index number based on the list below.
 // returns: a geoposition
 function geo_bookmark {
@@ -129,8 +138,8 @@ function geo_bookmark {
 
 //////////////////// User Interface stuff /////////////////// 
 function toggleTerVec {
-	if terMark { set terMark to false. }
-	else set terMark to true.
+	parameter var.
+	set terMark to var.
 	
 	local i is 1.
 	until i = 6 {
@@ -140,93 +149,33 @@ function toggleTerVec {
 	}
 }
 function toggleVelVec {
+	parameter var.
+	set stMark to var.
 	if submode = m_free {
 		set vecs[markHorV]:show to true.
 		set vecs[markDesired]:show to true.
 	}
 	else {
-		if stMark { set stMark to false. }
-		else set stMark to true.
-		
 		set vecs[markHorV]:show to stMark.
 		set vecs[markDesired]:show to stMark.
 	}
 }
 function toggleThrVec {
-	if thMark { set thMark to false. }
-	else set thMark to true.
-	
+	parameter var.
+	set thMark to var.
 	set i to 0.
 	for eng in engs {
 		set vecs[i]:show to thMark.
 		set i to i + 1.
 	}
-	
-	//set vecs[markThrustAcc]:show to true.
 }
 function toggleAccVec {
-	if miscMark { set miscMark to false. }
-	else set miscMark to true.
+	parameter var.
+	set miscMark to var.
 	set vecs[markTar]:show to miscMark.
 	//set vecs[markAcc]:show to miscMark.
 }
 
-
-
-//new
-local emptyString is "                                                                                                    ".
-function horizontalLine {
-	parameter line,char,ret is false.
-	local s is emptyString:substring(0,terminal:width).
-	set s to s:replace(" ",char).
-	
-	if ret return s.
-	else print s at (0,line).
-}
-
-function horizontalLineTo {
-	parameter line,colStart,colEnd,char,ret is false.
-	local s is emptyString:substring(0,colEnd - colStart + 1).
-	set s to s:replace(" ",char).
-	
-	if ret return s.
-	else print s at (colStart,line).
-}
-
-
-function verticalLineTo {
-	parameter column,lineStart,lineEnd,char.
-	local line is lineStart.
-	until line > lineEnd {
-		print char at (column,line).
-		set line to line + 1.
-	}
-}
-function printQuad {
-	parameter column1,column2,line1,line2,char.
-	local column is column1.
-	local s is "".
-	until column > column2 {
-		set s to char + s.
-		set column to column + 1.
-	}
-	local line is line1.
-	until line > line2 {
-		print s at (column1,line).
-		set line to line + 1.
-	}
-}
-
-function clearLine {
-	parameter line.
-	local i is 0.
-	local s is "".
-	until i = terminal:width {
-		set s to " " + s.
-		set i to i + 1.
-	}
-	print s at (0,line).
-}
 function popup {
 	parameter s.
 	HUDTEXT(s, 5, 2, 40, yellow, false).
@@ -244,192 +193,6 @@ function warning {
 	//style: - 1 = upper left - 2 = upper center - 3 = lower right - 4 = lower center
 }
 
-global backlog is list().
-function entry {
-	parameter s.
-	backlog:add(s).
-	if focused console_backlog().
-}
-function console_backlog {
-	
-	local emptyLine is "                                                  ".
-	local maxLines is terminal:height - bd.
-	local counter is 1.
-	local i is backlog:length - 1.
-	until counter > maxLines or counter > backlog:length {
-		print emptyLine at (0,bd+counter+1).
-		print backlog[i] at (0,bd+counter+1).
-		set counter to counter + 1.
-		set i to i - 1.
-	}
-}
-
-// console
-function console_init {
-	if focused = false {
-		set terminal:height to 5.
-		set terminal:width to 51.
-		clearscreen.
-		if mode = m_follow local appendStr is tarVeh:name.
-		else if mode = m_pos local appendStr is destinationLabel.
-		else local appendStr is "".
-		print ship:name + " | Mode: " + mode_string() + " " + appendStr at (0,1).
-		horizontalLine(2,"_"). 
-		print "Speed:         | Fuel:     " at (0,4). 
-	}
-	else {
-		global ld1 is 14.
-		global c1 is 13.
-		global c2 is 26.
-		global c3 is 42.
-		global rd1 is 6.
-		global rd2 is rd1 + 13.
-		if mode = m_race set bd to 1.
-		else set bd to rd2 + 11.
-		
-		set terminal:width to 51.
-		//set terminal:height to max(terminal:height,40).
-		//set terminal:height to max(terminal:height, bd + 2 + 6). //6+ lines for backlog
-		set terminal:height to bd + 2 + 6.
-		clearscreen.
-		
-		console_backlog().
-		
-		//local i is 0. 
-		//until i = (bd+1) { print " ". set i to i + 1. }
-		
-		print "  HOVERBOT OS  [" + ship:name + "]" at (0,0).
-		print "at " at (terminal:width-9,0).
-		horizontalLine(1,"_").
-		//left
-		if mode <> m_race {
-			if page = 1 {
-				
-				print "  1 - Options" at (0,3).
-				print "  2 - Hover " at (0,4).
-				print "  3 - Land " at (0,5).
-				print "  4 - Freeroam " at (0,6).
-				print "  5 - Go to bookmark " at (0,7).
-				print "  6 - Go to position  " at (0,8).
-				print "  7 - Chase vessel " at (0,9).
-				print "  8 - Patrol area" at (0,10).
-				print "  9 - Racing course" at (0,11).
-				print "  0 - Exit " at (0,12).
-				if mode = m_free and doLanding local modeMarker is m_free - 1.
-				else local modeMarker is mode.
-				if mode < 11 {
-					print "->" at (0,2 + modeMarker).
-					print "<-" at (c2-5,2 + modeMarker).
-				}
-
-			}
-			else {
-				if showstats {
-					print " 6 - Back " at (0,3).
-					print " MoI pitch: " + round(pitch_inertia,3) at (0,6).
-					print " MoI roll:  " + round(roll_inertia,3) at (0,7).
-					print " T pitch: " + round(pitch_torque,1) at (0,9).
-					print " T roll:  " + round(roll_torque,1) at (0,10).
-					print " Acc pitch: " + round(pitch_acc,3) + " (" + round((pitch_torque*throttle)/pitch_inertia,3) at (0,12).
-					print " Acc roll:  " + round(roll_acc,3) at (0,13).
-					
-					print " Speedlimit: " at (0,15).
-				}
-				else {
-					print "  1 - Run Modes" at (0,3).
-					print "  2 - Force Dock" at (0,4).
-					print "  3 - Auto Refuel" at (0,5).
-					print "  4 - Auto land" at (0,6).
-					print "  5 - Agressive Chase" at (0,7).
-					print "  6 - Vessel Stats" at (0,8).
-					print "  7 - Terrain Prediction" at (0,9).
-					print "  8 - Steering Display" at (0,10).
-					print "  9 - Thrust Display" at (0,11).
-					print "  0 - Misc Display" at (0,12).
-					if mode > 10 and mode < 21 {
-						print "->" at (0,2 + mode - 10).
-						print "<-" at (c2-5,2 + mode - 10).
-					}
-					local char is "X".
-					if forceDock print char at (4,4).
-					if autoFuel print char at (4,5).
-					if autoLand print char at (4,6).
-					if agressiveChase print char at (4,7).
-					
-					if terMark print char at (4,9).
-					if stMark print char at (4,10).
-					if thMark print char at (4,11).
-					if miscMark print char at (4,12).
-				}
-				
-			}
-
-			
-			
-			if all_libs_loaded { 
-				if not(showstats) {
-					if mode = m_hover print "Maintaining height." at (1,ld1 + 2).
-					else if mode = m_land print "Landing." at (1,ld1 + 2).
-					else if mode = m_free { 
-						print "[WASD to steer]" at (1,ld1 + 2).
-						print "Heading: " at (1,ld1 + 4). 
-						print "Speedlimit:" at (1,ld1 + 6). 
-					}
-					else if mode = m_race {
-						print "RACE ON!" at (1,ld1 + 2).
-					}
-					else {
-						if submode = m_follow {
-							print "Chasing vessel:" at (1,ld1 + 2).
-							print tarVeh:name at (1,ld1 + 4).
-							if tarVeh:loaded { print tarPart:name at (1,ld1 + 5). } 
-						}
-						else if mode = m_patrol print "Patrolling area. [WASD]" at (1,ld1 + 2).
-						else {
-							print "Going to destination." at (1,ld1 + 2).
-							print "Pos: " + destinationLabel at (1,ld1 + 4). 
-						}
-						print "Distance:" at (1,ld1 + 7).
-						print "Height D:" at (1,ld1 + 8).
-						print "LAT:" at (1,ld1 + 10).
-						print "LNG:" at (11,ld1 + 10).
-						print "Heading:" at (1,ld1 + 11).
-					}
-				
-				
-				
-				
-					//right
-					
-					print "Hover Height:" at (c2,3).
-					
-					print "Velocity limit:" at (c2,5).
-					
-					
-					print "--------[STATS]---------" at (c2,rd1 + 3).
-					print "FUEL |                 |" at (c2,rd1 + 5).
-					print "TWR (local):" at (c2,rd1 + 7).
-					
-					print "Drone Mass:" at (c2,rd1 + 9).
-					print "Payload:" at (c2,rd1 + 10).
-					
-					print "--------[FLIGHT]--------" at (c2, rd2).
-					print "  Vertical V:" at (c2,rd2 + 2).
-					print "Horizontal V:" at (c2,rd2 + 3).
-					print "Radar height:" at (c2,rd2 + 5).
-					print "Height error:" at (c2,rd2 + 6).
-					
-					horizontalLineTo(ld1,0,22,"-").
-					horizontalLineTo(rd1,c2-1,terminal:width-1,"_").
-					verticalLineTo(c2-3,2,bd-1,"||").
-				}
-			}
-			else print "Configuring stuff.." at (1,ld1 + 2).
-		}
-		
-		horizontalLine(bd,"=").
-	}
-}
 
 /////////////////////// VECTORS ///////////////////////////
 
@@ -473,10 +236,10 @@ function nz { //"not zero" , NaN protection
 	}
 	return float.
 }
-
+local c_pi is constant:pi.
 function toRad {
 	parameter n.
-	return n * ( constant:pi / 180).
+	return n * (c_pi / 180).
 }
 
 

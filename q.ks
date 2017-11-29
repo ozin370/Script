@@ -49,12 +49,17 @@ if didCompile { print "Compiling finished..". wait 0.4. }
 
 //now run the damned thing already
 
-
+clearguis().
 runoncepath("cam.ks").
 runoncepath("lib_quad.ksm").
 runoncepath("lib_json.ksm").
 runoncepath("race.ksm").
+runoncepath("lib_formation.ks").
 runoncepath("quad_loop.ksm").
+runoncepath("quad_GUI.ks").
+print "Running Quad setup..".
+core:doaction("close terminal",true).
 runpath("quad.ksm").
 
-//LOG PROFILERESULT() TO SOMEFIELNAME.csv.
+
+reboot.

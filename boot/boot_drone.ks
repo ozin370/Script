@@ -2,8 +2,8 @@
 ag1 off. ag2 off. ag3 off.
 switch to 0.
 set terminal:brightness to 1.
-//set terminal:charwidth to 12.
-//set terminal:charheight to 12.
+set terminal:width to 30.
+set terminal:height to 20.
 clearscreen.
 print "In standby".
 print "-------------------------".

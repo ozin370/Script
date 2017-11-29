@@ -32,6 +32,7 @@ set mainMenu to list(
 	list("Start Speed:",		"number",	{ parameter p is sv. if p <> sv set turn_speed to p. return round(turn_speed). }, 10),
 	list("-",					"line"),
 	list("Stage # to orbit:",	"number",	{ parameter p is sv. if p <> sv set stage_to_orbit to min(stage:number,max(0,round(p))). return stage_to_orbit. }, 1),
+	list("RCS in orbit:",		"bool",		{ parameter p is sv. if p <> sv set auto_rcs to boolConvert(p). return auto_rcs. }),
 	list("1st stg recovery:",	"bool",		{ parameter p is sv. if p <> sv set stg_recovery to boolConvert(p). return stg_recovery. }),
 	list("",					"text"),
 	list("Cinematic Mode:",		"bool",		{ parameter p is sv. if p <> sv set cinematic to boolConvert(p). return cinematic. }),
@@ -67,7 +68,7 @@ function stage_until_number {
 		until i = stage_number {
 			wait until stage:ready. 
 			stage.
-			if not stg_recovery wait 3.
+			wait 1.
 			set i to i - 1.
 		}
 		set th to old_th.
@@ -98,6 +99,7 @@ local cinematic is false.
 local stage_to_orbit is stage:number.
 local stg_recovery is false.
 local booster_vessel is ship.
+local auto_rcs is true.
 
 function saveSettings {
 	local lex is lexicon(
@@ -106,7 +108,8 @@ function saveSettings {
 		"turn_speed",turn_speed,
 		"calc_ascent",calc_ascent,
 		"stage_to_orbit",stage_to_orbit,
-		"stg_recovery",stg_recovery
+		"stg_recovery",stg_recovery,
+		"auto_rcs",auto_rcs
 	).
 	
 	local filePath is path("0:/json/launchParams/" + ship:name + ".json").
@@ -125,6 +128,7 @@ function loadSettings {
 		if lex:haskey("calc_ascent") set calc_ascent to lex["calc_ascent"].
 		if lex:haskey("stage_to_orbit") set stage_to_orbit to lex["stage_to_orbit"].
 		if lex:haskey("stg_recovery") set stg_recovery to lex["stg_recovery"].
+		if lex:haskey("auto_rcs") set auto_rcs to lex["auto_rcs"].
 		
 		add_entry(mission_time() + "Loaded launch parameters for craft " + ship:name).
 		return true.
@@ -202,8 +206,8 @@ until done or abort {
 	
 	// ### Runmodes ###
 	if runmode = 0 { //initial ascent, straight up
-		set th to min(1,th + 0.005 * (time:seconds - mission_start)).
-		if verticalspeed > turn_speed or alt:radar > 1000 {
+		set th to min(1,th + 0.02 * (time:seconds - mission_start)).
+		if verticalspeed > turn_speed or alt:radar > 2000 {
 			set runmode to 1.
 			add_entry(mission_time() + "Beginning ascent profile pitch-over..").
 		}
@@ -245,6 +249,8 @@ until done or abort {
 		
 		wait until kuniverse:activevessel = ship.
 		
+		if auto_rcs rcs on.
+		
 		set target_spd to sqrt(body:MU/(body:Radius + apoapsis)).
 		set spd_at_apo to velocityat(ship,eta:apoapsis + time:seconds):orbit:mag.
 		set apo_node to node(eta:apoapsis + time:seconds,0,0,target_spd-spd_at_apo).
@@ -254,14 +260,14 @@ until done or abort {
 		runpath("exec.ks",apo_node). //program to timewarp to and execute a node
 		
 		add_entry(mission_time() + "Circularization burn complete - fine tuning...").
-		if not stg_recovery {
+		//if not stg_recovery {
 			rcs on.
 			runpath("circ.ks","rcs"). //program that does the final touches on the circularization.
 			rcs off.
-		}
+		//}
 		
 		add_entry(mission_time() + "Launch complete! Final AP: " + round(apoapsis,1) + ", final PE: " + round(periapsis,1) + ", INC: " + round(ship:obt:inclination,3)).
-		
+		wait 3.
 		set done to true. //exit the runmodes loop - we're done here!
 	}
 	

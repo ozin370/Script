@@ -12,8 +12,8 @@ global mode is m_pos.
 global submode is m_pos.
 global page is 1.
 global focused is true.
-backlog:add("Booting up program..").
-console_init().
+entry("Booting up program..").
+
 wait 0.
 
 //undock if needed 
@@ -163,13 +163,6 @@ if yawRotatrons:length = 2 or yawRotatrons:length = 4 {
 	entry("Yaw control enabled.").
 	set yawControl to true.
 	
-	if ship:partstagged("front"):length > 0 {
-		set frontPart to ship:partstagged("front")[0].
-		set hasFront to true.
-		entry("Face front mode active.").
-	}
-	else set hasFront to false.
-
 	wait 0.2.
 }
 else set yawControl to false.
@@ -179,6 +172,8 @@ else set yawControl to false.
 // >>
 set hasGimbal to false.
 set hasCam to false.
+set hasCamRoll to false.
+set hasCamArm to false.
 set cam to ship:partstagged("camera").
 set camRotH to ship:partstagged("horizontal").
 set camRotV to ship:partstagged("vertical").
@@ -196,16 +191,38 @@ if cam:length > 0 and camRotH:length > 0 and camRotV:length > 0 {
 	set rotHMod to camRotH:getmodule("MuMechToggle").
 	set camRotV to camRotV[0].
 	set rotVMod to camRotV:getmodule("MuMechToggle").
+	rotHMod:setfield("acceleration",50). 
+	rotVMod:setfield("acceleration",50).   
 	
-	rotHMod:setfield("acceleration",100).
-	rotVMod:setfield("acceleration",100).
+	if ship:partstagged("roll"):length > 0 {
+		set camRotR to ship:partstagged("roll")[0].
+		set rotRMod to camRotR:getmodule("MuMechToggle").
+		set hasCamRoll to true.
+		rotRMod:setfield("acceleration",20).
+	}
+	else set hasCamRoll to false.
+	
+	if ship:partstagged("arm"):length > 0 {
+		set camArm to ship:partstagged("arm")[0].
+		set armMod to camArm:getmodule("MuMechToggle").
+		armMod:setfield("acceleration",20).
+		set hasCamArm to true.
+	}
+	
+	
 	
 	set frontPart to camRotV. 
-	set hasFront to true.
 }
 for servo in addons:ir:allservos {
 	if servo:part = camRotH set servoH to servo.
 	else if servo:part = camRotV set servoV to servo.
+	
+	if hasCamRoll {
+		if servo:part = camRotR set servoR to servo.
+	}
+	if hasCamArm {
+		if servo:part = camArm set servoArm to servo.
+	}
 }
 wait 0.1.
 // <<
@@ -252,97 +269,48 @@ function updateVec {
 }
 // <<
 
+// ### Cam modes ###
+// >>
+	function CamChase {
+		if (h_vel_mag > 0.1){
+			set desiredHV_capped to desiredHV:normalized * min(velocity:surface:mag,desiredHV:mag).
+			set focusCamPos to focusCamPos + velocity:surface * 0.05 + desiredHV_capped * 0.05. 
+			set focusCamPos:mag to max(10,velocity:surface:mag).
+		
+			return (angleaxis(8,vcrs(upVector,focusCamPos)) * -focusCamPos):normalized * (8 + 6 * (h_vel_mag/100)).
+		}
+		return extcam:position. // default to the existing vector
+	}
+	function CamRace1 {
+		local focusCamPos is (targetGate:position + upVector * 20 - gateFacing * (80 + targetGate:position:mag * 0.3)).
+		set extcam:camerafov to arctan(15/(focusCamPos:mag^0.7)). 
+		return focusCamPos.
+	}
+	
+	function CamGimbal {
+		return extcam:position * 0.2 + ((camRotV:facing:vector * -3) + upVector * -0.5 + camRotV:position) * 0.8.
+
+	}
+	
+	function CamTarget {
+		if hastarget {
+			local camVec is target:position.
+			set camVec:mag to camVec:mag + 15 .
+			return extcam:position.// * 0.5 + (camVec+upVector * 2.5) * 0.5. 
+		}
+		else {
+			gear on. //force next cam-mode
+			return extcam:position.
+		}
+		 
+	}
+	
+//<<
+
 //### User input function ###
+
 function inputs {
-	
-	// OPTIONS PAGE ######################################################################################
-	if page = 2 { 
-		if ag1 {
-			ag1 off.
-			if showstats set showstats to false.
-			else set page to 1.
-			
-			console_init().
-			save_json(). //save settings to json file on local volume
-		}
-		else if ag2 {
-			if forceDock {
-				set forceDock to false.
-				popup("Force-dock setting disabled").
-			}
-			else {
-				set forceDock to true.
-				popup("Force-dock setting enabled").
-			}
-			console_init().
-		}
-		else if ag3 {
-			if autoFuel {
-				set autoFuel to false.
-				popup("Auto-Dock on low fuel disabled").
-			}
-			else {
-				set autoFuel to true.
-				popup("Auto-Dock on low fuel enabled").
-			}
-			console_init().
-		}
-		else if ag4 {
-			if autoLand set autoLand to false.
-			else set autoLand to true.
-			console_init().
-		}
-		else if ag5 {
-			if agressiveChase {
-				set agressiveChase to false.
-				popup("Match acceleration setting disabled").
-			}
-			else {
-				set agressiveChase to true.
-				popup("Match acceleration setting enabled").
-			}
-			console_init().
-		}
-		else if ag6 {
-			if showstats set showstats to false.
-			else set showstats to true.
-			console_init().
-		}
-		
-		//ui
-		else if ag7 { //terrain prediciton vecs
-			toggleTerVec().
-			console_init().
-		}
-		else if ag8 { //steering stuff
-			toggleVelVec().
-			console_init().
-		}
-		if ag9 { //thrusters
-			toggleThrVec().
-			console_init().
-		}
-		else if ag10 { //misc
-			toggleAccVec().
-			console_init().
-		}
-		
-		if showstats {
-			if ship:control:pilotpitch <> 0 set speedlimitmax to max(5,speedlimitmax - round(ship:control:pilotpitch)).
-			//else if ship:control:pilotyaw <> 0 {}.
-		}
-	}
-	else if page = 1 {
-		if ag1 { // OPTIONS
-			ag1 off.
-			set page to 2.
-			console_init().
-		} 
-		else if ag10 { // EXIT
-			set exit to true.
-		}
-	}
-	
+
 	// MISC CONTROLS ##########################################################################################################
 	if not(isDocked) and not(charging) {
 		if hasCam {
@@ -399,210 +367,46 @@ function inputs {
 				set countN to 0.
 			}
 		}
-		else if submode = m_follow {
-			if ship:control:pilotpitch <> 0 {
-				set followDist to max(0,followDist - ship:control:pilotpitch*0.5).
-			}
-			
-			if ship:control:pilotyaw <> 0 {
-				set rotateSpeed to max(0,rotateSpeed + ship:control:pilotyaw*0.5).
-			}
-		}
-		else if mode = m_patrol {
-			if ship:control:pilotyaw <> 0 { // A+D
-				set patrolRadius to patrolRadius - ship:control:pilotyaw * min(500,max(1,abs(patrolRadius*0.075))).
-				set patrolRadius to min(50000, max(5,patrolRadius)).
-			}
-			if ship:control:pilotpitch <> 0 {
-				set freeSpeed to freeSpeed - ship:control:pilotpitch * min(5,max(1,abs(freeSpeed*0.1))).
-				set freeSpeed to min(min(speedlimitmax,30*TWR),max(0,freeSpeed)).
-			}
-		}
-		
-		if ship:control:pilotfore <> 0 { //target hover height 
-			set countH to countH + 1.
-			set heightShift to ship:control:pilotfore * (0.05 * min(countH,20)).
-			set tHeight to max(0.3,round(tHeight + heightShift,2)).
-		}
-		else {
-			set countH to 0.
-		}
-		
-		if gear {
-			gear off.
-			//if mode = m_race { nextGate(). entry("Skipped gate.").}
-			if hasCamAddon {
-				set camMode to camMode + 1.
-				if camMode = 3 set camMode to 0.
-				else if camMode = 2 and not(mode = m_race) set camMode to 0.
-				set extcam:camerafov to 70.
-				set extcam:cameradistance to 10.
-			}
-		}
-		
-		// (SUB)MODES ###########################################################################################
-		if page = 1 {
-			local modeChanged is false.
-			if ag2 { //hover
-				set mode to m_hover.
-				set submode to m_hover.
-				set modeChanged to true.
-				set vecs[markDestination]:show to false.
-				popup("Hover mode").
-			}
-			else if ag3 { //landing
-				set mode to m_free.
-				set submode to m_free.
-				set doLanding to true.
-				set freeSpeed to 0.
-				set freeHeading to 90.
-				set modeChanged to true.
-				set targetGeoPos to ship:geoposition.
-				set vecs[markDestination]:show to false.
-				popup("Landing").
-				entry("Landing..").
-			}
-			else if ag4 { //free
-				set mode to m_free.
-				set submode to m_free.
-				set doLanding to false.
-				set modeChanged to true.
-				set freeSpeed to 0.
-				set freeHeading to 90.
-				toggleVelVec().
-				set vecs[markDestination]:show to false.
-				popup("Freeroam mode").
-			}
-			else if ag5 { //bookedmarked location
-				set mode to m_bookmark.
-				set submode to m_pos.
-				set modeChanged to true.
-				if targetString = "POOL" { set targetGeoPos to geo_bookmark("LAUNCHPAD"). set targetString to "LAUNCHPAD". }
-				else if targetString = "LAUNCHPAD" { set targetGeoPos to geo_bookmark("VAB"). set targetString to "VAB". }
-				else if targetString = "VAB" { set targetGeoPos to geo_bookmark("RUNWAY E"). set targetString to "RUNWAY E". }
-				else if targetString = "RUNWAY E" { set targetGeoPos to geo_bookmark("RUNWAY W"). set targetString to "RUNWAY W". }
-				else if targetString = "RUNWAY W" { set targetGeoPos to geo_bookmark("ISLAND W"). set targetString to "ISLAND W". }
-				else if targetString = "ISLAND W" { set targetGeoPos to geo_bookmark("POOL"). set targetString to "POOL". }
-				else { set targetGeoPos to geo_bookmark("LAUNCHPAD"). set targetString to "LAUNCHPAD". }
-				set vecs[markDestination]:show to true.
-				set destinationLabel to targetString.
-				popup("Bookmark location: " + targetString).
-				entry("Go to: " + targetString).
-			}
-			else if ag6 { //local position
-				set targetGeoPos to ship:geoposition.
-				set targetString to "LOCAL".
-				set mode to m_pos.
-				set submode to m_pos.
-				set modeChanged to true.
-				set destinationLabel to targetString.
-				set vecs[markDestination]:show to true.
-				popup("Location submode").
-			}
-			else if ag7 { //target vehicles
-				set tarVeh to ship.
-				if hastarget {
-					set tarVeh to target.
-				}
-				else  {
-					if lastTargetCycle + 5 < time:seconds { set targetsInRange to sortTargets(). set target_i to 0. popup(targetsInRange:length). } //update target list
-					if targetsInRange:length > 0 {
-						local counter is 0.
-						local done is false.
-						until done or counter = targetsInRange:length {
-							if targetsInRange[target_i]:position:mag < 100000 {
-								set done to true.
-								set tarVeh to targetsInRange[target_i].
-							}
-							set target_i to target_i + 1.
-							set counter to counter + 1.
-							if target_i = targetsInRange:length set target_i to 0.
-						}
-						
-					}
-					
-					set lastTargetCycle to time:seconds.
-				}
-				if not(tarVeh = ship) {
-					set mode to m_follow.
-					set submode to m_follow.
-					set modeChanged to true.
-					if tarVeh:loaded { taggedPart(). }
-					else { set tarPart to ship:rootpart. set destinationLabel to tarVeh:name. }
-					popup("Following " + tarVeh:name).
-					entry("Following " + tarVeh:name).
-					//set vecs[markDestination]:show to true.
-					
-					//set target to tarVeh.
-				}
-
-			}
-			else if ag8 { //patrol
-				set targetGeoPos to ship:geoposition.
-				set patrolGeoPos to targetGeoPos.
-				set mode to m_patrol.
-				set submode to m_pos.
-				set freeSpeed to min(speedlimitmax,30*TWR)/2.
-				set modeChanged to true.
-				set destinationLabel to "Waypoint".
-				set vecs[markDestination]:show to true.
-			}
-			else if ag9 { // RACE ON 
-				set modeChanged to true.
-				set mode to m_race.
-				set submode to m_pos.
-				set gravitymod to 1.2. //.80
-				set thrustmod to 0.95. //.75
-				set PID_pitch:kp to 100. 
-				set PID_roll:kp to 100.
-				set climbDampening to 0.3.
-				setLights(1,0.5,0).
-				popup("Race mode started").
-				entry("Race started").
-				
-				listGates().
-				nextGate().
-				
-				set targetGeoPos to targetGate:geoposition.
-				set targetString to targetGate:name.
-				set destinationLabel to targetString.
-				set vecs[markDestination]:show to false.
-				//set vecs[markGate]:show to true.
-				
-				toggleVelVec(). 
-			}
-			if modeChanged { //stuff that needs doing after mode change 
-				if mode <> m_free {
-					set doLanding to false.
-					if not(stMark) {
-						set vecs[markHorV]:show to false.
-						set vecs[markDesired]:show to false.
-					}
-				}
-				
-				if not(mode = m_race) {
-					set gravitymod to 1.2.
-					set thrustmod to 0.92.
-					set PID_pitch:kp to 75. 
-					set PID_roll:kp to 75.
-					set climbDampening to 0.15.
-					set vecs[markGate]:show to false.
-					setLights(0,1,0).
-					
-					set PID_hAcc to pidloop(1.6 * ipuMod,0,0.2 + 1 - weightRatio,0,90).
-					set ang_vel_exponential to 0.5.
-				} 
-				else { 
-					set PID_hAcc to pidloop(1.6 * ipuMod,0,0.1,0,90). //2.1  0.4 
-					set ang_vel_exponential to 0.75.
-				}
-				console_init().
-			}
-		}
 	}
-	ag1 off. ag2 off. ag3 off. ag4 off. ag5 off. ag6 off. ag7 off. ag8 off. ag9 off. ag10 off. 
 }
 
+function toggleCamMode {
+	if hasCamAddon {
+		
+		set camMode to camMode + 1.
+		if camMode = 2 and mode <> m_race set camMode to camMode + 1.
+		if camMode = 3 and not(hasGimbal) set camMode to camMode + 1.
+		if camMode = 4 and not(hastarget) set camMode to camMode + 1.
+		if camMode = 5 set camMode to 0.
+		
+		set extcam:target to ship.
+		
+		if camMode = 1 {
+			set extcam:positionupdater to CamChase@.
+			entry("Camera mode: Smooth Chase").
+		}
+		else if camMode = 2 { 
+			set extcam:positionupdater to CamRace1@.
+			entry("Camera mode: Race").
+		}
+		else if camMode = 3 {
+			set extcam:target to Cam.
+			set extcam:positionupdater to CamGimbal@.
+			entry("Camera mode: Gimbal lock").
+		}
+		else if camMode = 4 {
+			set extcam:target to target.
+			set extcam:positionupdater to CamTarget@.
+			entry("Camera mode: Target").
+		}
+		else {
+			set extcam:positionupdater to DoNothing.
+			set extcam:camerafov to 70.
+			set extcam:cameradistance to 10.
+			entry("Camera mode: Free").
+		}
+	}
+}
 
 function taggedPart {
 	set tagged to tarVeh:PARTSTAGGED("attach").
@@ -717,7 +521,6 @@ set gravitymod to 1.2.
 set thrustmod to 0.92.
 set h_vel to v(0,0,0).
 set isDocked to false.
-set hasWinch to false.
 set ipuMod to sqrt(min(2000,config:ipu)/2000). //used to slow things down if low IPU setting 
 set camMode to 0.
 set destinationLabel to "".
@@ -726,11 +529,18 @@ set showstats to false.
 set ang_vel_exponential to 0.5.
 local doFlip is false.
 set dTavg to 0.02. 
-set climbDampening to 0.5.
+set climbDampening to 1.5.
 local terrainChecks is 5.
 set availableTWR to ship:maxthrustat(1) / ship:mass.
-set engineThrustLimitList to list(0,0,0,0). 
-
+set engineThrustLimitList to list(0,0,0,0).
+set gearMods to ship:modulesnamed("ModuleWheelDeployment").
+set upVector to up:vector.
+set minAlt to 0.
+set minimumDockTime to time:seconds.
+set h_acc to v(0,0,0).
+set winchModules to ship:modulesnamed("KASModuleWinch").
+if winchModules:length > 0 set hasWinch to true.
+else set hasWinch to false.
 
 if hasMS {
 	set mode to m_follow.
@@ -769,49 +579,60 @@ set PID_hAcc:setpoint to 0.
 local filename is "0:vessels/" + ship:name + ".json".
 if exists(filename) load_json(). //load saved settings on the local drive, if any.  
 set all_libs_loaded to true.
-backlog:add("All systems ready. Initializing controllers.").
-console_init().
+entry("All systems ready. Initializing controllers.").
 
-when camMode > 0 then {
-	if camMode = 1 and h_vel_mag > 0.1 { //chase cam mode
-		
-		set desiredHV_capped to desiredHV:normalized * min(shipVelocitySurface:mag,desiredHV:mag).
-		set focusCamPos to focusCamPos + shipVelocitySurface * 0.05 + desiredHV_capped * 0.05. 
-		set focusCamPos:mag to max(10,shipVelocitySurface:mag).
-		
-		set extcam:position to angleaxis(8,vcrs(upVector,focusCamPos)) * -focusCamPos.
-		set extcam:cameradistance to 8 + 6 * (h_vel_mag/100).
 
-	}
-	else if camMode = 2 {
-		local focusCamPos is (targetGate:position + upVector * 20 - gateFacing * (80 + targetGate:position:mag * 0.3)). 
-		
-		set extcam:camerafov to arctan(15/(focusCamPos:mag^0.7)). 
-		set extcam:position to focusCamPos.
-	}
-	return true.
+
+
+//when camMode > 0 then {
+//	if camMode = 1 and h_vel_mag > 0.1 { //chase cam mode
+//		
+//		set desiredHV_capped to desiredHV:normalized * min(shipVelocitySurface:mag,desiredHV:mag).
+//		set focusCamPos to focusCamPos + shipVelocitySurface * 0.05 + desiredHV_capped * 0.05. 
+//		set focusCamPos:mag to max(10,shipVelocitySurface:mag).
+//		
+//		set extcam:position to angleaxis(8,vcrs(upVector,focusCamPos)) * -focusCamPos.
+//		set extcam:cameradistance to 8 + 6 * (h_vel_mag/100).
+//
+//	}
+//	else if camMode = 2 {
+//		local focusCamPos is (targetGate:position + upVector * 20 - gateFacing * (80 + targetGate:position:mag * 0.3)). 
+//		
+//		set extcam:camerafov to arctan(15/(focusCamPos:mag^0.7)). 
+//		set extcam:position to focusCamPos.
+//	}
+//	return true.
+//}
+
+initializeTrigger(). //the trigger in this will be run at the beginning of every tick
+wait 0. //just to make sure the triggers run once before main loop
+
+gear off.
+// Retract gears (if any)
+for m in gearMods {
+	if m:hasaction("extend/retract") m:doaction("extend/retract",false).
 }
 
-// #####################################################
-// ### Code that needs to be run each tick, at the start
-when KUniverse:activevessel = ship then {
-	if focused inputs(). //check for user input 
-	return true.
-}
+
 //main controller loop
 set exit to false.
 set lockToggle to false.
+ag6 on.
+// CONFIG:STAT TO TRUE.
 until exit {
 	flightcontroller().
 	if lockToggle { set lockToggle to false. lock throttle to th. }
 }
-
+//log profileresult() to quadProfile.csv.
 
 ag1 off.
 set mode to 10.
 set submode to 10.
 
-console_init().
+set extcam:target to ship.
+set extcam:positionupdater to DoNothing.
+
+
 vecs_clear().
 clearvecdraws().
 for eng in engs {
@@ -837,5 +658,4 @@ unlock throttle.
 set ship:control:pilotmainthrottle to throt.
 entry("Program ended.").
 setLights(1,0.1,0.1).
-wait 1.
-reboot.
+wait 0.2.

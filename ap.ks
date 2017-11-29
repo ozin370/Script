@@ -986,7 +986,7 @@ until done {
 			local wrongWay is vdot(vxcl(vel,vel - velLast),hTargeVec) < 0.
 			set velLast to vel.
 			
-			local velTemp is angleaxis(velAngRot * timeIncrement * 0.5,velRotAxis) * hVel.
+			local velTemp is angleaxis(velAngRot * timeIncrement * 0.5,velRotAxis) * vel.
 			local posTemp is v(0,0,0).
 
 			local terrainClimb is -90.
@@ -997,7 +997,7 @@ until done {
 			
 			
 			
-			for i in range(steps) {
+			for i in range(steps)  // (for each incremental step to check..)
 				set posTemp to posTemp + velTemp * timeIncrement.
 				
 				if wrongWay { set velTemp to vel. } //currectly accelerating the wrong way
