@@ -1,0 +1,19 @@
+{
+    "entries": [
+        "turn_end",
+        55000,
+        "turn_exponent",
+        0.65,
+        "turn_speed",
+        30,
+        "calc_ascent",
+        false,
+        "stage_to_orbit",
+        2,
+        "stg_recovery",
+        true,
+        "auto_rcs",
+        true
+    ],
+    "$type": "kOS.Safe.Encapsulation.Lexicon"
+}
