@@ -3,8 +3,8 @@
 set config:ipu to max(config:ipu,2000).
 
 // autopilot
-runoncepath("lib_UI.ksm").
-runoncepath("steeringmanager.ksm").
+runoncepath("lib_UI.ks").
+runoncepath("steeringmanager.ks").
 
 set steeringmanager:yawpid:ki to 0.
 set steeringmanager:pitchpid:ki to 0.
@@ -28,8 +28,8 @@ lock throttle to th.
 	}
 	set bankPid to init_bank_pid().
 
-	set attackPid to PIDLOOP(3, 0.0, 3, -10, 10). //old: PIDLOOP(3, 0.0, 10, -10, 10).
-	set pitchPid to PIDLOOP(3.0, 0.2, 3.0, -10, 30). //(3.0, 0.3, 2.0, -15, 15). //outputs extra climb angle to get the velocity climb angle corrected
+	set attackPid to PIDLOOP(3, 0, 3, -10, 10). //old: PIDLOOP(3, 0.0, 3, -10, 10).
+	set pitchPid to PIDLOOP(3.0, 0.3, 3.0, -20, 20). //(3.0, 0.2, 3.0, -10, 30). //outputs extra climb angle to get the velocity climb angle corrected 
 	set throtPid to PIDLOOP(0.1, 0.011, 0.15, 0, 1).
 	set circlePid to PIDLOOP(0.1, 0.000, 0.01, 0, 1).
 	set wheelPid to PIDLOOP(0.15, 0.000, 0.1, -1, 1).
@@ -47,6 +47,7 @@ lock throttle to th.
 	local m_circle is 5.
 	local m_taxi is 6.
 	local m_waypoints is 7.
+	local m_follow is 8.
 	
 	local mode is m_manual.
 	local submode is m_manual.
@@ -60,6 +61,7 @@ lock throttle to th.
 	local targetAlt is round(altitude).
 	local controlSpeed is true.
 	local controlAlt is false.
+	local followTarget is ship.
 	
 	
 	
@@ -265,21 +267,21 @@ lock throttle to th.
 // >>
 
 set terminal:brightness to 1.
-set terminal:width to 46.
+set terminal:width to 56.
 set terminal:height to 40.
 clearscreen.
 
 
 // use the first two of these varables to set the position of the menu. The last two affect the width of the menu.
-local startLine is 1.		//the first menu item will start at this line in the terminal window
-local startColumn is 4.		//menu item description starts at this x coordinate, remember to leave some space for the marker on the left
-local nameLength is 21.		//how many characters of the menu item names to display
-local valueLength is 12.	//how many characters of the menu item values to display
-local sv is -9.9993134. 	// just a value that is extremely unlikely to be set to any of the varibles we want to change with the menu
+global startLine is 1.		//the first menu item will start at this line in the terminal window
+global startColumn is 4.		//menu item description starts at this x coordinate, remember to leave some space for the marker on the left
+global nameLength is 22.		//how many characters of the menu item names to display
+global valueLength is 20.	//how many characters of the menu item values to display
+global sv is -9.9993134. 	// just a value that is extremely unlikely to be set to any of the varibles we want to change with the menu
 
 local runwaysMenu is list().
 local runwaysEditMenu is list().
-function createRunwaysMenues {
+function createRunwaysMenues { //creates the menu list that will contain all of our created runways
 	set runwaysMenu to list().
 	set runwaysEditMenu to list().
 	local i is 0.
@@ -288,8 +290,8 @@ function createRunwaysMenues {
 		local rwI is i.
 		if not rw[0]:contains("take-off") {
 			runwaysMenu:add(list(rw[0],	"action" , 	{ set selectedRunway to rw. setMode(m_land). setMenu(mainMenu). })).
-			runwaysEditMenu:add(list(rw[0],	"action" , 	{ set editRunway to rw. set editRunwayI to rwI. BuildEditRunwayMenu(). set vd_runway_edit:show to true. setMenu(editRunwayMenu). })).
 		}
+		runwaysEditMenu:add(list(rw[0],	"action" , 	{ set editRunway to rw. set editRunwayI to rwI. BuildEditRunwayMenu(). set vd_runway_edit:show to true. setMenu(editRunwayMenu). })).
 		set i to i + 1.
 	}
 	runwaysMenu:add(list("-",				"line")).
@@ -343,6 +345,23 @@ function remove_waypoint_vecdraws {
 	}
 	set vd_waypoint_list to list().
 }
+function createTargetsMenu {
+	set followMenu to list().
+	list targets in tgts.
+	local followTargets is list().
+	for t in tgts {
+		if t:distance < 500000 followTargets:add(t).
+	}
+	set targetsMenu to list().
+	local i is 0.
+	until i >= followTargets:length {
+		local t is followTargets[i].
+		followMenu:add(list(t:name,	"action" , 	{ set followTarget to t. setMode(m_follow). setMenu(mainMenu). })).
+		set i to i + 1.
+	}
+	followMenu:add(list("-",				"line")).
+	followMenu:add(list("[<] MAIN MENU",		"backmenu", { return mainMenu. })).
+}
 
 
 set mainMenu to list(
@@ -386,7 +405,26 @@ function setMode {
 	parameter m.
 	set mode to m.
 	
-	if mode = m_land {
+	if ship:status:contains("Landed") and not(mode = m_takeoff or mode = m_manual) {
+		set nextmode to m.
+		set nextrw to selectedRunway.
+		when (alt:radar > 200) then {
+			set selectedRunway to nextrw.
+			setMode(nextmode).
+		}
+		
+		set mode to m_takeoff.
+	}
+	
+	if mode = m_takeoff {
+		set submode to m_takeoff.
+		set modeString to "take-off".
+		findRunway().
+		set runwayStart to selectedRunway[1].
+		set runwayEnd to selectedRunway[2].
+		
+	}
+	else if mode = m_land {
 		if ship:status = "Landed" {
 			set submode to m_manual.
 			set vd_pos:show to false.
@@ -409,13 +447,6 @@ function setMode {
 		set targetHeading to round(headingOf(ship:facing:vector),2).
 		set vd_pos:show to false.
 	}
-	else if mode = m_takeoff {
-		set submode to m_takeoff.
-		set modeString to "take-off".
-		set runwayStart to selectedRunway[1].
-		set runwayEnd to selectedRunway[2].
-		findRunway().
-	}
 	else if mode = m_circle {
 		set submode to m_circle.
 		set modeString to "circling".
@@ -433,6 +464,11 @@ function setMode {
 		set controlAlt to true.
 		set vd_pos:show to true.
 		set vd_waypoint_active:show to true.
+	}
+	else if mode = m_follow {
+		set submode to m_follow.
+		set modeString to "follow".
+		set vd_pos:show to false.
 	}
 }
 
@@ -463,6 +499,11 @@ set modesMenu to list(
 	list("Waypoints",	"action", 	{
 		if mode <> m_waypoints setMode(m_waypoints).
 		setMenu(waypointsMenu).
+	}),
+	list("Follow",	"action", 	{
+		//if mode <> m_follow setMode(m_follow).
+		createTargetsMenu().
+		setMenu(followMenu).
 	}),
 	list("-",				"line"),
 	list("[<] MAIN MENU",		"backmenu", { return mainMenu. })
@@ -611,7 +652,7 @@ set terrainMenu to list(
 
 // the list that defines the menu items: their names, types, and function
 set activeMenu to mainMenu.
-runpath("lib_menu.ksm").
+runpath("lib_menu.ks").
 
 // <<
 
@@ -874,6 +915,11 @@ until done {
 				set circleLoc to body:geopositionof(turnCenter).
 				
 				set runLandingSetup to false.
+				
+				set circleCenterDist to vxcl(upVec,circleLoc:position):mag.
+				if circleCenterDist > 6000 {
+					when circleCenterDist < 6000 then set runLandingSetup to true. //re-calc turn center position when we get close to runway
+				}
 			}
 			
 			local runwayAlt is max(0,runwayStart:terrainheight).
@@ -885,7 +931,7 @@ until done {
 			
 			local glideStartAlt is vdot(pos1UpVec,glideVec).
 			
-			local circleCenterDist is vxcl(upVec,circleLoc:position):mag.
+			set circleCenterDist to vxcl(upVec,circleLoc:position):mag.
 			set controlAlt to true.
 			if circleCenterDist < circleRadius + 500 { //in turn or close to it
 				set targetAlt to runwayAlt + glideStartAlt.
@@ -895,7 +941,7 @@ until done {
 				set targetAlt to max(runwayAlt + glideStartAlt,targetAlt).
 				set targetAlt to min(runwayAlt + glideStartAlt + max(0,circleCenterDist - circleRadius*4) / 6,targetAlt).
 				set targetSpeed to max(maxBankSpeed + 20,targetSpeed).
-				set targetSpeed to min(maxBankSpeed + 20 + max(0,circleCenterDist - circleRadius*3) / 100,targetSpeed).
+				set targetSpeed to min(maxBankSpeed + 20 + max(0,circleCenterDist - circleRadius*3) / 50,targetSpeed).
 			}
 		}
 	}
@@ -921,6 +967,15 @@ until done {
 			set circleRadius to 1.
 		}
 		set circleLoc to waypoints[0].
+	}
+	else if mode = m_follow {
+		local targetPosition is followTarget:position.
+		set controlAlt to true.
+		
+		
+		set targetAlt to followTarget:altitude.
+		set targetHeading to headingOf(targetPosition).
+		set targetSpeed to max(followTarget:airspeed + (followTarget:distance^1.2) / 100, stallSpeed).
 	}
 	
 	if submode = m_circle { //<-this must not be an else-if!
@@ -973,62 +1028,71 @@ until done {
 		set targetPitch to 90 - arccos(desiredVV/max(0.1,airspeed)).
 		set targetPitch to min(maxClimbAngle,max(-25,targetPitch)).
 		
-		// Terrain avoidance
-		if terrainDetection and ship:status = "Flying" {
-			
-			set dT to time:seconds - oldTime.
-			set oldTime to time:seconds.
-			
-			local hTargeVec is heading(targetHeading,0):vector.
-			
-			local velAngRot is min(45,vang(vel,velLast) / dT). //how much degrees we should rotate the accel vector between steps
-			local velRotAxis is vcrs(velLast,vel).  //the axis that we should rotate the acc vec around
-			local wrongWay is vdot(vxcl(vel,vel - velLast),hTargeVec) < 0.
-			set velLast to vel.
-			
-			local velTemp is angleaxis(velAngRot * timeIncrement * 0.5,velRotAxis) * vel.
-			local posTemp is v(0,0,0).
+		
+	}
+	
+	// Terrain avoidance
+	if terrainDetection and ship:status = "Flying" and (controlAlt or mode = m_land or mode = m_follow) {
+		
+		set dT to time:seconds - oldTime.
+		set oldTime to time:seconds.
+		
+		local hTargeVec is heading(targetHeading,0):vector.
+		
+		local velAngRot is min(45,vang(vel,velLast) / dT). //how much degrees we should rotate the accel vector between steps
+		local velRotAxis is vcrs(velLast,vel).  //the axis that we should rotate the acc vec around
+		local wrongWay is vdot(vxcl(vel,vel - velLast),hTargeVec) < 0.
+		set velLast to vel.
+		
+		local velTemp is angleaxis(velAngRot * timeIncrement * 0.5,velRotAxis) * vel.
+		local posTemp is v(0,0,0).
 
-			local terrainClimb is -90.
+		local terrainClimb is -90.
+		
+		
+		if submode = m_manual set heightMarginVec to upVec * 20.
+		else set heightMarginVec to upVec * heightMargin.
+		
+		
+		
+		
+		for i in range(steps) { // (for each incremental step to check..)
+			set posTemp to posTemp + velTemp * timeIncrement.
 			
-			
-			local heightMarginVec is upVec * heightMargin.
-			
-			
-			
-			
-			for i in range(steps)  // (for each incremental step to check..)
-				set posTemp to posTemp + velTemp * timeIncrement.
+			if wrongWay { set velTemp to vel. } //currectly accelerating the wrong way
+			else if submode = m_circle and currentRadius/circleRadius < 1.5 {
+				set velTemp to angleaxis(velAngRot * timeIncrement,velRotAxis) * velTemp.
+			}	
+			else {				
+				local hVelTemp is vxcl(upVec,velTemp).
 				
-				if wrongWay { set velTemp to vel. } //currectly accelerating the wrong way
-				else if submode = m_circle and currentRadius/circleRadius < 1.5 {
+				if vdot(velRotAxis,vcrs(hVelTemp,hTargeVec)) > 0 {
 					set velTemp to angleaxis(velAngRot * timeIncrement,velRotAxis) * velTemp.
-				}	
-				else {				
-					local hVelTemp is vxcl(upVec,velTemp).
 					
-					if vdot(velRotAxis,vcrs(hVelTemp,hTargeVec)) > 0 {
-						set velTemp to angleaxis(velAngRot * timeIncrement,velRotAxis) * velTemp.
-						
-						//if this makes it turn too much, just set velTemp to the target vel (end the turn)
-						if vdot(velRotAxis,vcrs(vxcl(upVec,velTemp),hTargeVec)) < 0 set velTemp to hTargeVec * velTemp:mag.
-					}
-					else set velTemp to hTargeVec * velTemp:mag.
+					//if this makes it turn too much, just set velTemp to the target vel (end the turn)
+					if vdot(velRotAxis,vcrs(vxcl(upVec,velTemp),hTargeVec)) < 0 set velTemp to hTargeVec * velTemp:mag.
 				}
-				
-				local terrainPos is body:geopositionof(posTemp):position.
-				if terrainVecs set vd_terrainlist[i]:start to terrainPos.
-				set terrainPos to terrainPos + heightMarginVec.
-				if terrainVecs set vd_terrainlist[i]:vec to terrainPos - vd_terrainlist[i]:start.
-				local tempClimb is 90 - vang(upVec,terrainPos).
-				
-				if tempClimb > terrainClimb set terrainClimb to tempClimb.
+				else set velTemp to hTargeVec * velTemp:mag.
 			}
-			if terrainClimb < lastTerrainClimb set terrainClimb to lastTerrainClimb * 0.998 + terrainClimb * 0.002.
-			set lastTerrainClimb to terrainClimb.
 			
-			set targetPitch to max(targetPitch,terrainClimb).
+			local terrainPos is body:geopositionof(posTemp):position.
+			if terrainVecs set vd_terrainlist[i]:start to terrainPos.
+			set terrainPos to terrainPos + heightMarginVec.
+			if terrainVecs set vd_terrainlist[i]:vec to terrainPos - vd_terrainlist[i]:start.
+			local tempClimb is 90 - vang(upVec,terrainPos).
+			
+			if mode = m_land and submode = m_manual {
+				if vdot(runwayVecNormalized,terrainPos-pos1) < -500 and tempClimb > terrainClimb set terrainClimb to tempClimb.
+			}
+			else if tempClimb > terrainClimb set terrainClimb to tempClimb.
 		}
+		if terrainClimb < lastTerrainClimb {
+			if mode = m_land and submode = m_manual set terrainClimb to lastTerrainClimb * 0.99 + terrainClimb * 0.01.
+			else set terrainClimb to lastTerrainClimb * 0.998 + terrainClimb * 0.002.
+		}
+		set lastTerrainClimb to terrainClimb.
+		
+		set targetPitch to max(targetPitch,terrainClimb).
 	}
 	
 	// ### HEADING ###
@@ -1039,7 +1103,7 @@ until done {
 	//if updateCam faceCamTo(hStTarget). //update camera position if heading was manually changed
 	
 	local compassError is vang(hVel,hStTarget).
-	if compassError < 45 { //kind of hurts to do these 4 calculations an additional time...
+	if compassError < 45 { //do these 4 calculations an additional time...
 		set stNormal to vcrs(hVel,hStTarget).
 		set stTarget to angleaxis(vang(hVel,hStTarget)^0.5,stNormal) * stTarget.
 		set hStTarget to vxcl(upVec,stTarget).
@@ -1047,13 +1111,15 @@ until done {
 	}
 	
 	local velPitch is 90 - vang(upVec,vel).
+	local pitchError is velPitch - targetPitch.
 	
-	local attackAngle is 10 + attackPid:update(time:seconds, velPitch - targetPitch). 
+	local attackAngle is 10 + attackPid:update(time:seconds, pitchError). 
 	set stNormal to vcrs(vel,stTarget).
 	set st to angleaxis(min(attackAngle,vang(vel,stTarget)),stNormal) * vel.
 	
-	local pitchError is velPitch - targetPitch.
-	//if abs(pitchError) > 5 pitchPid:reset().
+	
+	set pitchPid:ki to 0.4 - min(0.38, (max(1,airspeed - stallSpeed)^0.6)/100).
+	print "pitch ki: " + round(pitchPid:ki,3) + "     " at (1,terminal:height-2).
 	local pitchAdjust is pitchPid:update(time:seconds, pitchError * cos(abs(getBank()))) .
 	set st to angleaxis(pitchAdjust,vcrs(hVel,upVec)) * st.
 
@@ -1070,6 +1136,8 @@ until done {
 		
 		if vdot(vcrs(upVec,hVel),hStTarget) > 0 set compassError to -compassError.
 		set stRoll to bankPid:update(time:seconds, -compassError * bankFactor * max(0.05,min(1,(forwardSpeed - stallSpeed)/(maxBankSpeed-stallSpeed))) ).  
+		
+		if pitchError > 5 and abs(stRoll) < 20 set stRoll to min(10,max(-10,-stRoll)).
 		
 		local rollVector is angleaxis(stRoll,shipFacing) * vxcl(shipFacing,upVec).
 		set vd_roll:vec to rollVector:normalized * 5.
