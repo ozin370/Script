@@ -41,7 +41,7 @@ function loadSteering {
 		set steeringmanager:maxstoppingtime to lex["maxstoppingtime"].
 		set steeringmanager:rollcontrolanglerange to lex["rollcontrolanglerange"].
 		set steeringmanager:pitchtorqueadjust to lex["pitchtorqueadjust"].
-		set  steeringmanager:pitchtorquefactor to lex["pitchtorquefactor"].
+		set steeringmanager:pitchtorquefactor to lex["pitchtorquefactor"].
 		set steeringmanager:yawtorqueadjust to lex["yawtorqueadjust"].
 		set steeringmanager:yawtorquefactor to lex["yawtorquefactor"].
 		set steeringmanager:rolltorqueadjust to lex["rolltorqueadjust"].

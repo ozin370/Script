@@ -69,7 +69,7 @@ if not (defined incrOptions) local incrOptions is list (0.01,0.1,1,10,100,1000).
 local incrI is 2.
 local typingNumber is false.
 local typingString is false.
-local selectedLine is 0.
+global selectedLine is 0.
 local lineType is "text".
 
 local dummyMenu is list(
