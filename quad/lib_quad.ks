@@ -178,15 +178,14 @@ function toggleAccVec {
 
 function popup {
 	parameter s.
-	HUDTEXT(s, 5, 2, 40, yellow, false).
-	if addons:available("tts") addons:tts:say(s).
+	HUDTEXT(s, 5, 2, 34, yellow, false).
 	
 	// context: HUDTEXT( Message, delaySeconds, style, size, colour, boolean doEcho).
 	//style: - 1 = upper left - 2 = upper center - 3 = lower right - 4 = lower center
 }
 function warning {
 	parameter s.
-	HUDTEXT(s, 5, 2, 60, red, false).
+	HUDTEXT(s, 5, 2, 36, red, false).
 	if addons:available("tts") addons:tts:say("Warning!" + s).
 	
 	// context: HUDTEXT( Message, delaySeconds, style, size, colour, boolean doEcho).
@@ -194,7 +193,7 @@ function warning {
 }
 
 
-/////////////////////// VECTORS ///////////////////////////
+/////////////////////// VECTORS /////////////////////////// 
 
 // vecs_clear().
 function vecs_clear {
@@ -241,5 +240,10 @@ function toRad {
 	parameter n.
 	return n * (c_pi / 180).
 }
-
+function headingOf {
+	parameter vect. //0 = north, 90 = east
+	local ang is vang( vxcl(up:vector,vect) , north:vector ).
+	if vdot(heading(270,0):vector,vect) > 0 set ang to 360 - ang.
+	return ang.
+}
 

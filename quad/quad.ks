@@ -1,6 +1,7 @@
+@LAZYGLOBAL on.
 // ### quad.ks ###
 
-@LAZYGLOBAL on.
+
 clearvecdraws().
 clearscreen.
 switch to 0.
@@ -20,7 +21,7 @@ wait 0.
 set hasMS to false.
 if core:element:dockingports:length > 0 { 
 	//set localPort to core:element:dockingports[0].
-	set localPort to dockSearch(core:part:parent,core:part). //call to recursive search function that returns the cpu vessel's local dockingport
+	set localPort to dockSearch(core:part:parent,core:part). //call to recursive search function that returns the cpu vessel's global dockingport
 	entry("Found dockingport: " + localPort:name).
 	set hasPort to true.
 	if localPort:state = "Docked (docker)" or localPort:state = "Docked (dockee)" {
@@ -30,7 +31,7 @@ if core:element:dockingports:length > 0 {
 		wait 0.
 	}
 	for ms in localPort:modules {
-		local m is localPort:getmodule(ms).
+		global m is localPort:getmodule(ms).
 		if m:hasevent("Decouple Node") {
 			set mothership to ship.
 			m:doevent("Decouple Node").
@@ -49,12 +50,11 @@ for curpart in ship:parts {
 			dronePod:controlfrom.
 			lock throttle to 0. set ship:control:pilotmainthrottle to 0.
 			entry("Probe core: " + dronePod:name).
-			wait 0.1.
 		}
 	}
 }
 
-brakes off. ag1 off. ag2 off. ag3 off. ag4 off. ag5 off. ag6 off. ag7 off. ag8 off. ag9 off. ag10 off.
+brakes off. //ag1 off. ag2 off. ag3 off. ag4 off. ag5 off. ag6 off. ag7 off. ag8 off. ag9 off. ag10 off.
 vecs_clear().
 
 // ### engine/servo checks and preparations --------------------------------------------------------------------
@@ -65,15 +65,15 @@ set canReverse to false.
 list engines in engs.
 set engsLexList to list().
 
-local i is 0.
+global i is 0.
 for eng in engs {
 	//check for foldable engines, unfold
-	local thisEngineCanReverse is false.
-	local reverseMod is 0.
+	global thisEngineCanReverse is false.
+	global reverseMod is 0.
 	for moduleStr in eng:modules {
 		
 		
-		local mod is eng:getmodule(moduleStr).
+		global mod is eng:getmodule(moduleStr).
 		if mod:hasevent("Deploy Propeller") {
 			mod:doevent("Deploy Propeller").
 			set deploying to true.
@@ -87,7 +87,7 @@ for eng in engs {
 		
 	}
 	
-	local currentLex is lexicon(). //temporary dummy lex
+	global currentLex is lexicon(). //temporary dummy lex
 	//assign engines as pitch/roll
 	if vdot(facing:starvector,eng:position) < -0.3 {
 		set eng_roll_pos to lexicon().
@@ -127,7 +127,6 @@ set engDist to engDist/4.
 if deploying { entry("Deploying propellers.."). wait 2. }
 
 
-local yawRotatrons is list().
 set i to 0.
 for eng in engs {
 	if not(eng:ignition) { eng:activate(). wait 0. }
@@ -135,37 +134,18 @@ for eng in engs {
 	set vecs[i]:show to false.
 	set eng:thrustlimit to 100.
 	
-	set rot to 0.
-	
-	
-	
 	//check for yaw servos
-	for moduleStr in eng:parent:modules {
-		if moduleStr = "MuMechToggle" {
-			set rot to eng:parent:getmodule("MuMechToggle").
-			if rot:hasfield("Rotation") {
-				rot:setfield("Acceleration",25).
-				
-				for s in addons:ir:allservos {
-					if s:part = eng:parent { yawRotatrons:add(s). }
-				}
-			}
-		}
+	if eng:parent:hasmodule("ModuleRoboticRotationServo") {
+		set rot to eng:parent:getmodule("ModuleRoboticRotationServo").
+		rot:setfield("damping", 20).
 	}
 	
 	set i to i + 1.
 }
 
-setLights(0,1,0).
+set servoKAL to ship:modulesnamed("ModuleRoboticController")[0].
 
-if yawRotatrons:length = 2 or yawRotatrons:length = 4 {
-	entry("Found " + yawRotatrons:length + " servos attached to engines.").
-	entry("Yaw control enabled.").
-	set yawControl to true.
-	
-	wait 0.2.
-}
-else set yawControl to false.
+setLights(0,1,0).
 // <<
 
 //### camera stuff ---------------------------------------------------------------------
@@ -179,10 +159,9 @@ set camRotH to ship:partstagged("horizontal").
 set camRotV to ship:partstagged("vertical").
 if cam:length > 0 and camRotH:length > 0 and camRotV:length > 0 {
 	entry("Found camera and gimballing parts, enabling camera controls..").
-	wait 0.2.
 	set hasGimbal to true.
 	set cam to cam[0].
-	//if false {
+	//if false { 
 		set hasCam to true.
 		set camMod to cam:getmodule("MuMechModuleHullCameraZoom").
 	//}
@@ -191,8 +170,8 @@ if cam:length > 0 and camRotH:length > 0 and camRotV:length > 0 {
 	set rotHMod to camRotH:getmodule("MuMechToggle").
 	set camRotV to camRotV[0].
 	set rotVMod to camRotV:getmodule("MuMechToggle").
-	rotHMod:setfield("acceleration",50). 
-	rotVMod:setfield("acceleration",50).   
+	rotHMod:setfield("acceleration",20). 
+	rotVMod:setfield("acceleration",20).   
 	
 	if ship:partstagged("roll"):length > 0 {
 		set camRotR to ship:partstagged("roll")[0].
@@ -209,44 +188,48 @@ if cam:length > 0 and camRotH:length > 0 and camRotV:length > 0 {
 		set hasCamArm to true.
 	}
 	
+	//set frontPart to camRotV.
 	
+	set g_cam:onclick to { camMod:doevent("Activate Camera"). }.
 	
-	set frontPart to camRotV. 
 }
-for servo in addons:ir:allservos {
-	if servo:part = camRotH set servoH to servo.
-	else if servo:part = camRotV set servoV to servo.
-	
-	if hasCamRoll {
-		if servo:part = camRotR set servoR to servo.
-	}
-	if hasCamArm {
-		if servo:part = camArm set servoArm to servo.
+else set g_cam:visible to false.
+
+if addons:ir:available and addons:ir:allservos:length > 0 {
+	for servo in addons:ir:allservos {
+		if servo:part = camRotH set servoH to servo.
+		else if servo:part = camRotV set servoV to servo.
+		
+		if hasCamRoll {
+			if servo:part = camRotR set servoR to servo.
+		}
+		if hasCamArm {
+			if servo:part = camArm set servoArm to servo.
+		}
 	}
 }
-wait 0.1.
 // <<
 
-// ### Vecdraws -----------------------------------------------------------
+// ### Vecdraws ---------------------------
 // >>
-//local markThrustAcc is vecs_add(v(0,0,0),v(0,0,0),red,"Thr").
-//local markStar is vecs_add(v(0,0,0),facing:starvector*5,rgba(1,1,0,0.1),"stb",0.2).
-//local markTop is vecs_add(v(0,0,0),facing:topvector*5,rgba(1,0.8,0,0.12),"top",0.2).
-//local markFwd is vecs_add(v(0,0,0),facing:forevector*5,rgba(1,0.6,0,0.14),"fwd",0.2).
-local targetVec is up:forevector.
-local targetVecStar is v(0,0,0).
-local targetVecTop is v(0,0,0).
-local markTar is vecs_add(v(0,0,0),v(0,0,0),cyan,"tgt",0.2).
-//local markTarP is vecs_add(v(0,0,0),v(0,0,0),cyan,"TP",0.2).
-//local markTarY is vecs_add(v(0,0,0),v(0,0,0),cyan,"TY",0.2).
-//local markAcc is vecs_add(v(0,0,0),v(0,0,0),green,"acc",0.2). 
-local markHorV is vecs_add(v(0,0,0),v(0,0,0),blue,"HV",0.2).
-local markDesired is vecs_add(v(0,0,0),v(0,0,0),yellow,"",0.2).
-local markVMod is vecs_add(v(0,0,0),v(0,0,0),green,"",0.2).
-local markDestination is vecs_add(v(0,0,0),-up:vector * 3,rgb(1,0.8,0),"",0.2).
-local markGate is vecs_add(v(0,0,0),-up:vector * 40,rgb(0,1,0),"",10).
+//global markThrustAcc is vecs_add(v(0,0,0),v(0,0,0),red,"Thr").
+//global markStar is vecs_add(v(0,0,0),facing:starvector*5,rgba(1,1,0,0.1),"stb",0.2). 
+//global markTop is vecs_add(v(0,0,0),facing:topvector*5,rgba(1,0.8,0,0.12),"top",0.2).
+//global markFwd is vecs_add(v(0,0,0),facing:forevector*5,rgba(1,0.6,0,0.14),"fwd",0.2).
+global targetVec is up:forevector.
+global targetVecStar is v(0,0,0).
+global targetVecTop is v(0,0,0).
+global markTar is vecs_add(v(0,0,0),v(0,0,0),cyan,"tgt",0.2).
+//global markTarP is vecs_add(v(0,0,0),v(0,0,0),cyan,"TP",0.2).
+//global markTarY is vecs_add(v(0,0,0),v(0,0,0),cyan,"TY",0.2).
+//global markAcc is vecs_add(v(0,0,0),v(0,0,0),green,"acc",0.2). 
+global markHorV is vecs_add(v(0,0,0),v(0,0,0),blue,"vel",0.3).
+global markDesired is vecs_add(v(0,0,0),v(0,0,0),yellow,"",0.3).
+global markVMod is vecs_add(v(0,0,0),v(0,0,0),green,"",0.2).
+global markDestination is vecs_add(v(0,0,0),-up:vector * 3,rgb(1,0.8,0),"",0.2).
+global markGate is vecs_add(v(0,0,0),-up:vector * 40,rgb(0,1,0),"",10).
 
-local pList is list(). //terrain prediction vecs
+global pList is list(). //terrain prediction vecs
 pList:add(0).
 pList:add(vecs_add(v(0,0,0),up:vector * 3,rgb(1,0,0.0),"",1.0)).
 pList:add(vecs_add(v(0,0,0),up:vector * 3,rgb(1,0.2,0.0),"",1.0)).
@@ -271,21 +254,6 @@ function updateVec {
 
 // ### Cam modes ###
 // >>
-	function CamChase {
-		if (h_vel_mag > 0.1){
-			set desiredHV_capped to desiredHV:normalized * min(velocity:surface:mag,desiredHV:mag).
-			set focusCamPos to focusCamPos + velocity:surface * 0.05 + desiredHV_capped * 0.05. 
-			set focusCamPos:mag to max(10,velocity:surface:mag).
-		
-			return (angleaxis(8,vcrs(upVector,focusCamPos)) * -focusCamPos):normalized * (8 + 6 * (h_vel_mag/100)).
-		}
-		return extcam:position. // default to the existing vector
-	}
-	function CamRace1 {
-		local focusCamPos is (targetGate:position + upVector * 20 - gateFacing * (80 + targetGate:position:mag * 0.3)).
-		set extcam:camerafov to arctan(15/(focusCamPos:mag^0.7)). 
-		return focusCamPos.
-	}
 	
 	function CamGimbal {
 		return extcam:position * 0.2 + ((camRotV:facing:vector * -3) + upVector * -0.5 + camRotV:position) * 0.8.
@@ -294,7 +262,7 @@ function updateVec {
 	
 	function CamTarget {
 		if hastarget {
-			local camVec is target:position.
+			global camVec is target:position.
 			set camVec:mag to camVec:mag + 15 .
 			return extcam:position.// * 0.5 + (camVec+upVector * 2.5) * 0.5. 
 		}
@@ -346,7 +314,8 @@ function inputs {
 				if mapview set eastShift to eastShift * 100.
 				else set eastShift to eastShift * max(1,min(10,targetGeoPosP:mag ^ 0.1)).
 				
-				set targetGeoPosP to targetGeoPosP + vcrs(north:vector,up:vector):normalized * eastShift.
+				if mapview set targetGeoPosP to targetGeoPosP + vcrs(north:vector,up:vector):normalized * eastShift.
+				else set targetGeoPosP to targetGeoPosP + vcrs(extcam:position,up:vector):normalized * -eastShift.
 				set targetGeoPos to body:geopositionof(targetGeoPosP).
 			}
 			else {
@@ -359,7 +328,8 @@ function inputs {
 				if mapview set northShift to northShift * 100.
 				else set northShift to northShift * max(1,min(10,targetGeoPosP:mag ^ 0.1)).
 				
-				set targetGeoPosP to targetGeoPosP + vxcl(up:vector,north:vector):normalized * northShift. 
+				if mapview set targetGeoPosP to targetGeoPosP + vxcl(up:vector,north:vector):normalized * northShift. 
+				else set targetGeoPosP to targetGeoPosP + vxcl(up:vector,extcam:position):normalized * -northShift. 
 				set targetGeoPos to body:geopositionof(targetGeoPosP).
 				
 			}
@@ -370,31 +340,81 @@ function inputs {
 	}
 }
 
+on ag10 {
+	set doFlip to true.
+	if vdot(desiredHV,facing:vector) < 0 set frontFlip to true.
+	else set frontFlip to false.
+	return true.
+}
+on ag9 { toggleCamMode(). return true. }
+on ag8 {
+	if mode = m_race {
+		set focusCamPos to vxcl(upVector,targetGate:position) * (0.5 + random() * 0.5) + upVector * random() * 30.
+	}
+	return true.
+}
+
 function toggleCamMode {
 	if hasCamAddon {
 		
 		set camMode to camMode + 1.
 		if camMode = 2 and mode <> m_race set camMode to camMode + 1.
-		if camMode = 3 and not(hasGimbal) set camMode to camMode + 1.
-		if camMode = 4 and not(hastarget) set camMode to camMode + 1.
-		if camMode = 5 set camMode to 0.
+		if camMode = 3 and mode <> m_race set camMode to camMode + 1.
+		if camMode = 4 and not(hasGimbal) set camMode to camMode + 1.
+		if camMode = 5 and not(hastarget) set camMode to camMode + 1.
+		if camMode >= 6 set camMode to 0.
 		
 		set extcam:target to ship.
 		
 		if camMode = 1 {
-			set extcam:positionupdater to CamChase@.
+			set extcam:positionupdater to DoNothing.
+			set extcam:camerafov to 65.
+			//set extcam:positionupdater to CamChase@.
+			when true then {
+				if (h_vel_mag > 0.1){
+					set desiredHV_capped to desiredHV:normalized * min(velocity:surface:mag,desiredHV:mag).
+					set focusCamPos to focusCamPos + velocity:surface * 0.03 + desiredHV_capped * 0.05. 
+					set focusCamPos:mag to max(10,velocity:surface:mag).
+					
+					set extcam:position to (angleaxis(8,vcrs(upVector,focusCamPos)) * -focusCamPos):normalized *  (8 + groundspeed/20).
+				}
+				if camMode = 1 return true.
+			}
 			entry("Camera mode: Smooth Chase").
 		}
 		else if camMode = 2 { 
-			set extcam:positionupdater to CamRace1@.
+			//set extcam:positionupdater to CamRace1@. 
+			set extcam:positionupdater to DoNothing.
+			when true then {
+				//set focusCamPos to focusCamPos * 0.99 + 0.01 * (targetGate:position + upVector * 20 - gateFacing * (80 + targetGate:position:mag * 0.3)).
+				set focusCamPos to focusCamPos * 0.99 + 0.01 * (-targetGate:position:normalized * 20 + upVector * -1).
+				set extcam:camerafov to arctan(15/(focusCamPos:mag^0.7)). 
+				set extcam:position to focusCamPos.
+				if camMode = 2 return true.
+			}
 			entry("Camera mode: Race").
 		}
-		else if camMode = 3 {
-			set extcam:target to Cam.
-			set extcam:positionupdater to CamGimbal@.
-			entry("Camera mode: Gimbal lock").
+		else if camMode = 3 { //VAB
+			set extcam:positionupdater to DoNothing.
+			
+			when true then {
+				local vabPos is LATLNG(-0.0967646955755359, -74.6187122587352):position.
+				set focusCamPos to  (vabPos + upVector * 20 + vxcl(upVector,vabPos):normalized * -20).
+				set extcam:camerafov to arctan(15/(focusCamPos:mag^0.7)).  
+				
+				set extcam:position to focusCamPos.
+				
+				if camMode = 3 return true.
+				else { set extcam:camerafov to 70. set extcam:cameradistance to 10. }
+			}
+			entry("Camera mode: VAB").
 		}
 		else if camMode = 4 {
+			set extcam:target to Cam.
+			set extcam:positionupdater to CamGimbal@.
+			entry("Camera mode: Gimbal lock"). 
+		}
+		else if camMode = 5 {
 			set extcam:target to target.
 			set extcam:positionupdater to CamTarget@.
 			entry("Camera mode: Target").
@@ -423,7 +443,7 @@ function taggedPart {
 function getInertia { //moment of inertia around an axis
 	parameter axis. //vector
 	
-	local inertia is 0.
+	global inertia is 0.
 	for p in ship:parts {
 		set inertia to inertia + p:mass * (vxcl(axis,p:position):mag^2).
 	}
@@ -468,6 +488,9 @@ entry("Fuel type: " + fuelType).
 
 //### Vars initial ###
 //>>
+global th is 0.
+lock throttle to th.
+
 set sampleInterval to 0.2.
 set lastTargetCycle to 0.
 set doLanding to false.
@@ -476,28 +499,25 @@ list targets in targs.
 set target_i to 0.
 set tarPart to 0.
 set adjustedMass to mass.
-set localTWR to (ship:maxthrustat(1) / adjustedMass)/(body:mu / body:position:mag^2).
-set TWR to (ship:maxthrustat(1) / adjustedMass)/9.81.
+set localTWR to (ship:maxthrust / adjustedMass)/(body:mu / body:position:mag^2).
+set TWR to (ship:maxthrust / adjustedMass)/9.81.
 set v_acc_e_old to 0.
 set h_acc_e_old to v(0,0,0).
-local tOld is time:seconds. local velold is velocity:surface. local dT is 1. local tarVelOld is v(0,0,0).
+global tOld is time:seconds. global velold is velocity:surface. global dT is 1. global tarVelOld is v(0,0,0).
 global tHeight is round(min(10,alt:radar + 4),2).
-global th is 0.
-local posI is 0.
-local accI is 0.
-local throtOld is 0.
-local lastT is time:seconds - 1000.
-local acc_list is list().
+global posI is 0.
+global accI is 0.
+global throtOld is 0.
+global lastT is time:seconds - 1000.
+global acc_list is list().
 set i to 0. until i = 5 { acc_list:add(0). set i to i + 1. }
-local posList is list().
+global posList is list().
 set i to 0. until i = 10 { posList:add(ship:geoposition:terrainheight). set i to i + 1. }
-lock throttle to th.
-global thrust_toggle is true. 
 set targetGeoPos to ship:geoposition.
 set targetString to "LOCAL".
 set massOffset to 0.
 set charging to false.
-set speedlimitmax to 200.
+set speedlimitmax to 225.
 set consoleTimer to time:seconds.
 set slowTimer to time:seconds.
 set forceUpdate to true.
@@ -515,10 +535,13 @@ set stVec to v(0,0,0).
 set agressiveChase to false.
 set focusPos to facing:topvector * 10.
 set focusCamPos to facing:topvector * 1.
+set desiredHV_capped to focusCamPos.
 set vMod to 0.
 set fuel to 100.
 set gravitymod to 1.2.
 set thrustmod to 0.92.
+set climbDampening to 0.3.
+set angVelMult to 0.15.
 set h_vel to v(0,0,0).
 set isDocked to false.
 set ipuMod to sqrt(min(2000,config:ipu)/2000). //used to slow things down if low IPU setting 
@@ -526,12 +549,16 @@ set camMode to 0.
 set destinationLabel to "".
 set lastCamActivation to 0.
 set showstats to false.
-set ang_vel_exponential to 0.5.
-local doFlip is false.
+set fuelRate to 0.
+set lastFuel to 100.
+set localFocusPos to v(0,0,0).
+
+
+global doFlip is false.
 set dTavg to 0.02. 
-set climbDampening to 1.5.
-local terrainChecks is 5.
-set availableTWR to ship:maxthrustat(1) / ship:mass.
+
+global terrainChecks is 5.
+set availableTWR to ship:maxthrust / ship:mass.
 set engineThrustLimitList to list(0,0,0,0).
 set gearMods to ship:modulesnamed("ModuleWheelDeployment").
 set upVector to up:vector.
@@ -553,31 +580,61 @@ if hasMS {
 
 //### PID controllers ###
 //>>
-if canReverse {
-	global PID_pitch is P_init(100.0,-200,200). 
-	global PID_roll is P_init(100.0,-200,200).  
-}
-else {
-	global PID_pitch is pidloop(75, 0, 2, -100, 100). //(75, 0, 2, -100, 100). 
-	//global PID_pitch is P_init(50.0,-100,100). //P_init(50.0,-100,100). 
-	global PID_roll is pidloop(75, 0, 2, -100, 100). //(75, 0, 2, -100, 100).
-	//global PID_roll is P_init(50.0,-100,100). //P_init(50.0,-100,100).
+
+global PID_pitch is pidloop(50, 0, 1.5, -100, 100). //(75, 0, 2, -100, 100).  
+//global PID_pitch is P_init(50.0,-100,100). //P_init(50.0,-100,100). 
+global PID_roll is pidloop(50, 0, 1.5, -100, 100). //(75, 0, 2, -100, 100).
+//global PID_roll is P_init(50.0,-100,100). //P_init(50.0,-100,100). 
+
+if true {
+	on ag1 {
+		set PID_pitch:kD to PID_pitch:kD - 0.1.
+		set PID_roll:kD to PID_roll:kD - 0.1.
+		popup("Engine balance PID kD: " + PID_pitch:kD).
+		return true.
+	}
+	on ag2 {
+		set PID_pitch:kD to PID_pitch:kD + 0.1.
+		set PID_roll:kD to PID_roll:kD + 0.1.
+		popup("Engine balance PID kD: " + PID_pitch:kD).
+		return true.
+	}
+	on ag3 {
+		set PID_pitch:kP to PID_pitch:kP - 10.
+		set PID_roll:kP to PID_roll:kP - 10.
+		popup("Engine balance PID kP: " + PID_pitch:kP). 
+		return true.
+	}
+	on ag4 {
+		set PID_pitch:kP to PID_pitch:kP + 10.
+		set PID_roll:kP to PID_roll:kP + 10.
+		popup("Engine balance PID kP: " + PID_pitch:kP).
+		return true.
+	}
+	on ag5 {
+		set angVelMult to angVelMult - 0.05.
+		popup("Angvel mult: " + angVelMult). 
+		return true.
+	}
+	on ag6 {
+		set angVelMult to angVelMult + 0.05.
+		popup("Angvel mult: " + angVelMult). 
+		return true.
+	}
+	
 }
 
-global PID_vAcc is pidloop(6,0,0.3,-90,90). //pidloop(8,0,0.5,-90,90).   
+
+global PID_vAcc is pidloop(6,0,0.3,-90,90). //pidloop(8,0,0.5,-90,90).
 set PID_vAcc:setpoint to 0.
 
-//global PID_hAcc is pidloop(2.1,0,0.1,0,90).   //(3,0,0.3,0,90).     
-global PID_hAcc is pidloop(1.4 * ipuMod,0.2,0.1,0,90).  
+global PID_hAcc is pidloop(1.6 * ipuMod,0,0.2,0,90). // pidloop(1.4 * ipuMod,0.2,0.1,0,90).  //global PID_hAcc is pidloop(2.1,0,0.1,0,90).   //(3,0,0.3,0,90).  
 set PID_hAcc:setpoint to 0.
 
-//horizontal speed to destination PID
-//global PID_hVel is pidloop(1,0,0,0,200).
-//set PID_hVel:setpoint to 0.
 //<<
 
-local filename is "0:vessels/" + ship:name + ".json".
-if exists(filename) load_json(). //load saved settings on the local drive, if any.  
+load_json(). //load saved settings on the local drive, if any.
+  
 set all_libs_loaded to true.
 entry("All systems ready. Initializing controllers.").
 
@@ -596,7 +653,7 @@ entry("All systems ready. Initializing controllers.").
 //
 //	}
 //	else if camMode = 2 {
-//		local focusCamPos is (targetGate:position + upVector * 20 - gateFacing * (80 + targetGate:position:mag * 0.3)). 
+//		global focusCamPos is (targetGate:position + upVector * 20 - gateFacing * (80 + targetGate:position:mag * 0.3)). 
 //		
 //		set extcam:camerafov to arctan(15/(focusCamPos:mag^0.7)). 
 //		set extcam:position to focusCamPos.
@@ -607,7 +664,10 @@ entry("All systems ready. Initializing controllers.").
 initializeTrigger(). //the trigger in this will be run at the beginning of every tick
 wait 0. //just to make sure the triggers run once before main loop
 
+
 gear off.
+set bootTime to time:seconds.
+when bootTime + 0.02 < time:seconds then set r_free:pressed to true. //selectMode(r_free).
 // Retract gears (if any)
 for m in gearMods {
 	if m:hasaction("extend/retract") m:doaction("extend/retract",false).
@@ -617,7 +677,7 @@ for m in gearMods {
 //main controller loop
 set exit to false.
 set lockToggle to false.
-ag6 on.
+
 // CONFIG:STAT TO TRUE.
 until exit {
 	flightcontroller().
@@ -632,27 +692,27 @@ set submode to 10.
 set extcam:target to ship.
 set extcam:positionupdater to DoNothing.
 
+save_json().
 
 vecs_clear().
 clearvecdraws().
 for eng in engs {
 	for moduleStr in eng:modules {
-		local mod is eng:getmodule(moduleStr).
+		global mod is eng:getmodule(moduleStr).
 		if mod:hasevent("Retract Propeller") {
 			mod:doevent("Retract Propeller").
 		}
 	}
 	eng:shutdown().
+	set eng:thrustlimit to 100.
 }
 if hasGimbal { 
 	rotHMod:doaction("move +",false). rotHMod:doaction("move -",false). 
 	rotVMod:doaction("move +",false). rotVMod:doaction("move -",false). 
 }
-if yawControl {
-	for s in yawRotatrons {
-		s:moveto(0,5).
-	}
-}
+
+servoKAL:setfield("play position", 350).
+
 set th to throt.
 unlock throttle.
 set ship:control:pilotmainthrottle to throt.

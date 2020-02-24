@@ -13,8 +13,8 @@ global formationTarget is list(0).
 
 function formationComUpdate {
 	set shipMessages to ship:messages.
-	if not shipMessages:empty {
-		until shipMessages:empty set msg to shipMessages:pop.
+	until shipMessages:empty {
+		set msg to shipMessages:pop.
 		set cnt to msg:content.
 		local msgtype is cnt[0].
 		
@@ -30,13 +30,31 @@ function formationComUpdate {
 			set formationLastUpdate to time:seconds.
 			set formationTarget to cnt.
 		}
+		else if msgtype = 5 {
+			set r_race:pressed to true. //start race mode 
+			msg:sender:connection:sendmessage(list(2)).
+		}
 	}
 }
 
+//parameters: 4, 
 function formationBroadcast {
-	parameter msgtype, velocityVec is v(0,0,0), positionVec is v(0,0,0).
-	set broadcastMsg to list(msgtype,velocityVec,positionVec).
+	parameter velocityVec is v(0,0,0), positionVec is v(0,0,0).
+	
+	local i is 0.
 	for f in Followers {
-		f:connection:sendmessage(broadcastMsg).
+		local followerDist is 10 + 10 * floor(i / 2). //the first two 10m, the next two 20m etc
+		
+		if mod(i,2) = 0 set followerPos to angleaxis(120,up:vector) * (positionVec * followerDist).
+		else set followerPos to angleaxis(-120,up:vector) * (positionVec * followerDist).
+		
+		f:connection:sendmessage(list(4,velocityVec,followerPos)).
+		set i to i + 1.
+	}
+}
+
+function raceBroadcast {
+	for f in Followers {
+		f:connection:sendmessage(list(5)).
 	}
 }
