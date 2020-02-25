@@ -140,6 +140,12 @@ set style_label_compact:textcolor to rgb(1,1,1).
 		set title_label:style:margin:v to 0.
 		set title_label:style:textcolor to rgb(0.2,1,0.3).
 		//title:addspacing(-1).
+		
+		global title_ipu is title:addlabel("-").
+		set title_ipu:style:margin:h to 2.
+		set title_ipu:style:margin:v to 0.
+		set title_ipu:style:width to 56.
+		
 		global title_fuel_text is title:addlabel("100%").
 		set title_fuel_text:style:margin:h to 2.
 		set title_fuel_text:style:margin:v to 0.
@@ -375,16 +381,7 @@ set style_label_compact:textcolor to rgb(1,1,1).
 							
 							global dropdown_target is box_follow_dropdown:addpopupmenu().
 							set dropdown_target:style:width to 150.
-							//set targetsInRange to sortTargets(). //get vessels in range
-							//set targetsInRangeStr to targetStrings(targetsInRange). //get their names
-							//set dropdown_target:options to targetsInRangeStr.
-							//set dropdown_target:index to -1.
-							
-							//set dropdown_target:onclick to { 
-							//	set targetsInRange to sortTargets(). 
-							//	set targetsInRangeStr to targetStrings(targetsInRange).
-							//	set dropdown_target:options to targetsInRangeStr. 
-							//}.
+
 							set dropdown_target:onchange to { parameter c. select_target(c). }.
 						
 						global box_target_distance is box_follow:addhlayout().
@@ -477,6 +474,13 @@ set style_label_compact:textcolor to rgb(1,1,1).
 						global b_vd_attitude is box_options:addcheckbox("Attitude",false).
 							set b_vd_attitude:style:fontsize to 12.
 							set b_vd_attitude:ontoggle to { parameter val. toggleAccVec(val). }.
+						
+						box_options:addspacing(5).
+						global b_skip_frames is box_options:addcheckbox("IPU save mode",false).
+							set b_skip_frames:style:fontsize to 12.
+							
+							set skip_frames to false.
+							set b_skip_frames:ontoggle to { parameter val. set skip_frames to val. }.
 						box_options:addspacing(-1).
 				
 			//<<
@@ -663,7 +667,7 @@ function selectMode { //this is called whenever a new mode is selected in the me
 		set vecs[markHorV]:show to true.
 		set vecs[markDesired]:show to true.
 		set vecs[markDestination]:show to false.
-		set angVelMult to 0.20.
+		set angVelMult to 0.18.
 	}
 	else if gui_mode = r_bookmark {
 		set activeStack to stack_bookmark.
@@ -707,35 +711,6 @@ function selectMode { //this is called whenever a new mode is selected in the me
 			popup("Following " + tarVeh:name).
 			entry("Following " + tarVeh:name).
 		}
-		//else  {
-		//	if lastTargetCycle + 5 < time:seconds { set targetsInRange to sortTargets(). set target_i to 0. popup(targetsInRange:length). } //update target list
-		//	if targetsInRange:length > 0 {
-		//		global counter is 0.
-		//		global done is false.
-		//		until done or counter = targetsInRange:length {
-		//			if targetsInRange[target_i]:position:mag < 100000 {
-		//				set done to true.
-		//				set tarVeh to targetsInRange[target_i].
-		//			}
-		//			set target_i to target_i + 1.
-		//			set counter to counter + 1.
-		//			if target_i = targetsInRange:length set target_i to 0.
-		//		}
-		//		
-		//	}
-		//	
-		//	set lastTargetCycle to time:seconds.
-		//}
-		//if not(tarVeh = ship) {
-		//	
-		//	
-		//	set mode to m_follow.
-		//	set submode to m_follow.
-		//	if tarVeh:loaded { taggedPart(). }
-		//	else { set tarPart to ship:rootpart. set destinationLabel to tarVeh:name. }
-		//	popup("Following " + tarVeh:name).
-		//	entry("Following " + tarVeh:name).
-		//}
 	}
 	else if gui_mode = r_patrol {
 		set activeStack to stack_patrol.
@@ -751,12 +726,14 @@ function selectMode { //this is called whenever a new mode is selected in the me
 		set activeStack to stack_race.
 		set mode to m_race.
 		set submode to m_pos.
-		set gravitymod to 1.2. //.80
-		set thrustmod to 0.95. //.75 
-		set PID_pitch:kp to 75. 
-		set PID_roll:kp to 75.
+		
+		set gravitymod to 1.2. //1.2
+		set thrustmod to 0.99. //.95  
+		set PID_pitch:kp to 85. 
+		set PID_roll:kp to 85.
 		set angVelMult to 0.18.
-		set climbDampening to 0.3.
+		set climbDampening to 0.3. //0.3
+		
 		setLights(1,0.5,0).
 		if not(defined raceLaps) global raceLaps is 0.
 		global raceLapsList is list().
@@ -769,10 +746,9 @@ function selectMode { //this is called whenever a new mode is selected in the me
 		set targetString to targetGate:name.
 		set destinationLabel to targetString.
 		set vecs[markDestination]:show to false.
-		//set vecs[markGate]:show to true. 
 		toggleVelVec(false). 
 		
-		if isLeading raceBroadcast(). //tell followers to also enter race mode
+		if isLeading raceBroadcast(). //tell followers to also enter race mode 
 	}
 	
 	if mode <> m_free {
@@ -830,13 +806,14 @@ function next_bookmark {
 function set_bookmark {
 	parameter bookmark_str.
 	
-	if bookmark_str = "DRONE POS" { set targetGeoPos to ship:geoposition. set targetString to "DRONE POS". }
-	else if bookmark_str = "LAUNCHPAD" { set targetGeoPos to geo_bookmark("LAUNCHPAD"). set targetString to "LAUNCHPAD". }
+	set targetString to bookmark_str.
+	if bookmark_str = "DRONE POS" { set targetGeoPos to ship:geoposition.  }
+	else if bookmark_str = "LAUNCHPAD" { set targetGeoPos to geo_bookmark("LAUNCHPAD"). }
 	else if bookmark_str = "VAB" { set targetGeoPos to geo_bookmark("VAB"). set targetString to "VAB". }
-	else if bookmark_str = "RUNWAY E" { set targetGeoPos to geo_bookmark("RUNWAY E"). set targetString to "RUNWAY E". }
-	else if bookmark_str = "RUNWAY W" { set targetGeoPos to geo_bookmark("RUNWAY W"). set targetString to "RUNWAY W". }
-	else if bookmark_str = "ISLAND W" { set targetGeoPos to geo_bookmark("ISLAND W"). set targetString to "ISLAND W". }
-	else if bookmark_str = "POOL" { set targetGeoPos to geo_bookmark("POOL"). set targetString to "POOL". }
+	else if bookmark_str = "RUNWAY E" { set targetGeoPos to geo_bookmark("RUNWAY E"). }
+	else if bookmark_str = "RUNWAY W" { set targetGeoPos to geo_bookmark("RUNWAY W").  }
+	else if bookmark_str = "ISLAND W" { set targetGeoPos to geo_bookmark("ISLAND W"). }
+	else if bookmark_str = "POOL" { set targetGeoPos to geo_bookmark("POOL"). }
 	else { set targetGeoPos to geo_bookmark("LAUNCHPAD"). set targetString to "LAUNCHPAD". }
 	popup("Bookmark location: " + targetString).
 	set destinationLabel to targetString.

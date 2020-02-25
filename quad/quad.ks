@@ -491,6 +491,7 @@ entry("Fuel type: " + fuelType).
 global th is 0.
 lock throttle to th.
 
+
 set sampleInterval to 0.2.
 set lastTargetCycle to 0.
 set doLanding to false.
@@ -581,9 +582,9 @@ if hasMS {
 //### PID controllers ###
 //>>
 
-global PID_pitch is pidloop(50, 0, 1.5, -100, 100). //(75, 0, 2, -100, 100).  
+global PID_pitch is pidloop(50, 0, 0.3, -100, 100). //(75, 0, 2, -100, 100).  
 //global PID_pitch is P_init(50.0,-100,100). //P_init(50.0,-100,100). 
-global PID_roll is pidloop(50, 0, 1.5, -100, 100). //(75, 0, 2, -100, 100).
+global PID_roll is pidloop(50, 0, 0.3, -100, 100). //(75, 0, 2, -100, 100).
 //global PID_roll is P_init(50.0,-100,100). //P_init(50.0,-100,100). 
 
 if true {

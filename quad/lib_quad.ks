@@ -23,35 +23,6 @@ function mode_string {
 	else return "error".
 }
 
-function reverseLimit {
-	parameter lex,limit,isPosEng.
-	local reverseMod is lex["reverseMod"].
-	local eng is lex["part"].
-	local doReverse is false.
-	
-	//if isPosEng {
-		if limit < -100 {
-			set doReverse to true.
-			if not(lex["inReverse"]) {
-				reverseMod:doevent("Set Reverse Thrust").
-				set lex["inReverse"] to true.
-			}
-			set limit to -limit - 200. 
-			//limit is -200, = 0 + 100 = 100
-			//limit is -101, = -99 + 100 = 1
-		}
-		else {
-			if lex["inReverse"] {
-				reverseMod:doevent("Set Normal Thrust").
-				set lex["inReverse"] to false.
-			}
-		}
-	//}
-	
-	set eng:thrustlimit to min(100, 100 + limit).
-	
-	return lex.
-}
 
 function dockSearch {
 	parameter checkPart,originPart. //checkPart is the current part the function is working on, originPart is the part that called it (a child or parent).
@@ -186,10 +157,6 @@ function popup {
 function warning {
 	parameter s.
 	HUDTEXT(s, 5, 2, 36, red, false).
-	if addons:available("tts") addons:tts:say("Warning!" + s).
-	
-	// context: HUDTEXT( Message, delaySeconds, style, size, colour, boolean doEcho).
-	//style: - 1 = upper left - 2 = upper center - 3 = lower right - 4 = lower center
 }
 
 
@@ -217,24 +184,11 @@ function vecs_add {
 	vecs:add(VECDRAWARGS(p, v, c, descr, 1, false,w)).
 	return vecs:length - 1.
 }
-function vecs_add_v {
-	parameter p,v,c,descr,w.
-	vecs:add(VECDRAWARGS(p, v, c, descr, 1, true,w)).
-	return vecs:length - 1.
-}
-
 global vecs is list().
 if vecs:length > 0 vecs_clear().
 
 ////////////////////////////////////////////////////////// 
 
-function nz { //"not zero" , NaN protection
-	parameter float.
-	if abs(float) < 0.001 {
-		set float to 0.001.
-	}
-	return float.
-}
 local c_pi is constant:pi.
 function toRad {
 	parameter n.

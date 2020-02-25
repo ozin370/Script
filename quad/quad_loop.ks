@@ -35,14 +35,6 @@ function initializeTrigger { //called once by quad.ks right before flightcontrol
 		if hasGimbal { // gimbal camera (hull cam) 
 			set dT2 to max(0.02,timeSeconds - tOld2).
 			set tOld2 to timeSeconds.
-		//	
-		//	set v_dif to (shipVelocitySurface - velold)/dT2.
-		//	set velold to shipVelocitySurface.
-	    //
-		//	set h_acc to vxcl(upVector, v_dif).
-		//	set v_acc to vdot(upVector, v_dif).
-		//	
-		//	updateGimbal().
 		}
 		// <<
 		
@@ -104,7 +96,7 @@ function flightcontroller {
 	// ### THRUST AND STUFF ###
 	// >>
 	set totalThrust to v(0,0,0).
-	set i to 0. until i = 4 { //engine vecdraws and thrust vector
+	for i in range(4) { //engine vecdraws and thrust vector
 		set totalThrust to totalThrust + engs[i]:facing:vector * engs[i]:thrust.
 		
 		if thMark {
@@ -112,7 +104,6 @@ function flightcontroller {
 			set vecs[i]:VEC to engs[i]:facing:vector * (1.5 * engDist * engineThrustLimitList[i]).
 			set vecs[i]:START to engs[i]:position.
 		}
-		set i to i + 1.
 	}
 	// <<
 	
@@ -600,12 +591,10 @@ function flightcontroller {
 		// >>
 		set tilt to vang(upVector,shipFacing).
 		
-		set acc_freefall to gravityMag * gravitymod. // the larger the modifier the more overshoot & steeper climb
-		//set acc_thr to (vdot(upVector, availableTWRVec) - gravityMag) * thrustmod. 
 		set acc_maxthr to (maxTWR - gravityMag) * thrustmod. 
 		
 		if altErr < 0 set max_acc to acc_maxthr.
-		else set max_acc to acc_freefall.
+		else set max_acc to gravityMag * gravitymod. // the larger the modifier the more overshoot & steeper climb
 		
 		//set burn_duration to v_vel_abs/abs(max_acc). //fix  
 		//set burn_distance to (v_vel * burn_duration) + (0.5 * max_acc * (burn_duration^2)). //fix  
@@ -955,12 +944,9 @@ function flightcontroller {
 		set pitch_err to toRad(vang(shipFacing, targetVecTop)).
 		set roll_err to toRad(vang(shipFacing, targetVecStar)).
 		
-		
 		set pitch_acc to (pitch_torque * (thMid^0.5) * angVelMult) / pitch_inertia.
 		set roll_acc to (roll_torque * (thMid^0.5) * angVelMult) / roll_inertia.
-		//set pitch_acc to (pitch_torque * (((thMid + th)/2)^0.5) * angVelMult) / pitch_inertia. //(pitch_torque * (thMid^0.5) * 0.15) / pitch_inertia. //(pitch_torque * thMid * 0.30) / pitch_inertia. 
-		//set roll_acc to (roll_torque * (((thMid + th)/2)^0.5) * angVelMult) / roll_inertia. //(roll_torque * (thMid^0.5) * 0.15) / roll_inertia. //(roll_torque * thMid * 0.30) / roll_inertia. 
-		
+
 		set pitch_vel_target to ( 2 * pitch_err * pitch_acc)^0.5.
 		set roll_vel_target to ( 2 * roll_err * roll_acc)^0.5.
 
@@ -1071,6 +1057,7 @@ function flightcontroller {
 		// >>
 		set dTavg to dTavg * 0.80 + dT * 0.20.
 		set title_hz:text to round(1/dT) + "hz".
+		set title_ipu:text to round(core:getfield("kOS average power") / 0.0002) + "i".
 		
 		if box_all:visible {
 			if box_right:visible {
@@ -1115,8 +1102,10 @@ function flightcontroller {
 				set consoleTimer to timeSeconds.
 			}
 		}
-		else {
+		else if timeSeconds > consoleTimer + 0.5 {
 			fuelDisplay().
+			
+			set consoleTimer to timeSeconds.
 		}
 		
 		// << ### terminal end ###
@@ -1171,48 +1160,7 @@ function flightcontroller {
 		// >>
 		
 		if hasGimbal {
-		//	if hastarget {
-		//		local localFocusPos is target:position - cam:position.
-		//		local camTopVector is cam:facing:topvector.
-		//		
-		//		//vertical hinge, part=camRotV , module=rotVMod , servo=servoV
-		//		set vertAngleErr to vang(camTopVector,vxcl(camRotV:facing:starvector,localFocusPos)).
-		//		if vdot(camRotV:facing:topvector,localFocusPos) < 0 set vertAngleErr to -vertAngleErr. 
-		//		
-		//		
-		//		rotVMod:setfield("speed",abs(vertAngleErr/8)).
-		//		if round(vertAngleErr,1) < 0 rotVMod:doaction("move +",true).
-		//		else if round(vertAngleErr,1) > 0 rotVMod:doaction("move -",true).
-		//		else { rotVMod:doaction("move +",false). rotVMod:doaction("move -",false). }
-		//		//servoV:moveto(rotVMod:getfield("rotation") - vertAngleErr - vdot(camRotV:facing:starvector,ship:angularvel) * (180/constant:pi) * dT2 ,8).  
-		//		
-		//		//horizontal rotatron,  part=camRotH , module=rotHMod , servo=servoH
-		//		
-		//		set horAngleErr to vang(vxcl(camRotH:facing:vector,localFocusPos),-camRotH:facing:topvector). 
-		//		if vdot(camRotH:facing:starvector,localFocusPos) < 0 set horAngleErr to -horAngleErr.  
-		//		set targetRot to rotHMod:getfield("rotation") - horAngleErr.
-		//		set targetRot to targetRot - vdot(camRotH:facing:vector * -1,ship:angularvel) * (180/constant:pi) * dT2. //compensate for angular velocity of the drone
-		//		
-		//		rotHMod:setfield("speed",abs(horAngleErr/8)).
-		//		if round(horAngleErr) > 0 rotHMod:doaction("move -",true).
-		//		else if round(horAngleErr) < 0 rotHMod:doaction("move +",true).
-		//		else { rotHMod:doaction("move +",false). rotHMod:doaction("move -",false). }
-		//		//servoH:moveto(targetRot, 20).//min(100,abs(horAngleErr) * 1)  
-		//		
-		//		//roll
-		//		set targetRot to vang(upVector,vxcl(camRotV:facing:vector,shipFacing)).
-		//		if vdot(camRotV:facing:starvector,upVector) > 0 set targetRot to -targetRot.
-		//		//servoR:moveto(targetRot + vdot(camRotV:facing:vector,ship:angularvel) * (180/constant:pi) * dT2, 20).
-		//		
-		//		//print "horErrorI offset: " + round(horErrorI,4) + "       " at (0,terminal:height-7).
-		//		
-		//		
-		//	}
-		//	else {
-		//		servoH:moveto(0,1).
-		//		servoV:moveto(0,1).
-		//		//if hasCamRoll servoR:moveto(0,1).
-		//	}
+
 			if hasCamArm {
 				servoArm:moveto( ((alt:radar - 1 + vdot(upVector,cam:position))/2) * armMod:getfield("max") ,50).
 			}
@@ -1220,9 +1168,11 @@ function flightcontroller {
 		// <<
 	}
 	
-	//keep the thing running at 25hz
-	//if tOld = timeSeconds wait 0.03. 
-	//else wait 0.
-	wait 0.
+	if skip_frames {
+		//keep the thing running at max 25hz
+		if tOld = timeSeconds wait 0.03. 
+		else wait 0.
+	}
+	else wait 0.
 	
 }
