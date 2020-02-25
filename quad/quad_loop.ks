@@ -86,6 +86,8 @@ function initializeTrigger { //called once by quad.ks right before flightcontrol
 
 function flightcontroller {
 	// <<
+	formationComUpdate(). //check messages
+	
 	if hasPort { // IS DOCKED CHECK
 		local portSatus is localPort:state.
 		if portSatus = "Docked (docker)" or portSatus = "Docked (dockee)" set isDocked to true.
@@ -632,7 +634,7 @@ function flightcontroller {
 		// ### DesiredHV (horizontal velocity) ####
 		// >>
 		
-		formationComUpdate().
+		
 		
 		//set speedlimit to min(speedlimitmax,30*TWR).
 		
@@ -693,9 +695,7 @@ function flightcontroller {
 
 			set desiredHV to targetV + targetPosXcl:normalized * sqrt( 2 * max(0.01,targetPosXcl:mag - max(0.5,angSteerError/(maxNeutTilt*2)) * approachSpeed * 2) * (maxHA^0.95)). 
 		}
-		//else if targetPosXcl:mag > 20 set desiredHV to targetV + targetPosXcl:normalized * (targetPosXcl:mag^0.8) * (1 + (TWR - 4)/10). 
 		else set desiredHV to targetV + targetPosXcl:normalized * (targetPosXcl:mag^0.85) * 0.6. 
-		//else set desiredHV to targetV + targetPosXcl:normalized * (targetPosXcl:mag^0.8) / (6/TWR). 
 		
 			
 		if mode = m_race {
@@ -717,14 +717,6 @@ function flightcontroller {
 			
 			local targetSideSpeed is min(side_dist^1.5,sqrt(2*max(0.01,adjustedDist - curSideSpeed*0.25)*side_acc)).  //min(side_dist^1.5,sqrt(2*(adjustedDist^0.9)*side_acc)). 
 			
-			
-			//local side_acc_duration is max(0.01,targetSideSpeed/side_acc). 
-			//if curSideSpeed < 0 { //drone is currently moving away from center line 
-			//	set side_acc_duration to side_acc_duration + abs(curSideSpeed)/side_acc.
-			//}
-			//local side_acc_distance is (curSideSpeed * side_acc_duration) + (0.5 * side_acc * (side_acc_duration^2)).
-			
-			
 			 
 			if behindGate { //drone is behind the gate  
 				set behindGate to true.
@@ -739,34 +731,27 @@ function flightcontroller {
 				set targetFrontSpeed to max(gateSpeed, gateSpeed + sqrt(2 * max(0.01,front_dist - abs(curForwardSpeed*0.5)) * (maxHA * 0.25))).
 				set targetFrontSpeed to min(targetFrontSpeed,350).  
 				
-				if side_dist > 5.5 { //6.5
+				if side_dist > 5 { //6.5
 					//local forwardLimit is tan(vang(gateSideVec,desiredHV)) * max(5,targetSideSpeed).  // * max(5,targetSideSpeed).
 					local forwardLimit is tan(vang(gateSideVec,desiredHV)) * max(15,targetSideSpeed).  // * max(5,targetSideSpeed).
-					print tan(vang(gateSideVec,desiredHV)) + "             " at (0,0).
 					if vdot(desiredHV,tempFacing) < 0 set forwardLimit to -forwardLimit.
 					set targetFrontSpeed to min(targetFrontSpeed,forwardLimit).
 					
+				}
+				else if front_dist/max(1,curForwardSpeed) < 0.4 { //start turning towards next gate when very close
+					local gate_eta is front_dist/max(1,curForwardSpeed).
+					set tempFacing to (tempFacing * gate_eta +  gateFacingAtMax * (0.4 - gate_eta)):normalized.
 				}
 				
 				//set targetFrontSpeed to min(targetFrontSpeed,max(40,max(1,front_dist)^1.2)/(side_acc_duration*2)).    
 				
 				//height error based limit
 				set targetFrontSpeed to min(targetFrontSpeed,(front_dist - 25) * 0.35 + 300 / max(1,(altErrAbs-1.5)*1.5)). // min(targetFrontSpeed,(front_dist - 15) * 0.25 + 300 / max(1,(altErrAbs-1.5)*2)). 
-				
-				//local approachAng is min(90,vang(tempFacing,h_vel)). 
-				//set targetFrontSpeed to min(targetFrontSpeed, max(40,front_dist) / (approachAng/10)).  
-				
-				//set desiredHV:mag to 150.
 			
 
 				//### desiredHV vector split into two components then merged again ###  
-				
-				//local desiredHVfront is tempFacing * min(targetFrontSpeed,vdot(tempFacing,desiredHV)).
 				local desiredHVfront is tempFacing * targetFrontSpeed.
-				
-				//local desiredHVside is gateSideVec * min(targetSideSpeed,vdot(gateSideVec,desiredHV)).  
 				local desiredHVside is gateSideVec * targetSideSpeed.
-				
 				set desiredHV to desiredHVfront + desiredHVside.
 			}
 		
