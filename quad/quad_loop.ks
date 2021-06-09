@@ -100,12 +100,6 @@ function flightcontroller {
 	set totalThrust to v(0,0,0).
 	for i in range(4) { //engine vecdraws and thrust vector
 		set totalThrust to totalThrust + engs[i]:facing:vector * engs[i]:thrust.
-		
-		if thMark {
-			set engineThrustLimitList[i] to engineThrustLimitList[i] * 0.8 + (th * (engs[i]:thrustlimit/100)) * 0.2. 
-			set vecs[i]:VEC to engs[i]:facing:vector * (1.5 * engDist * engineThrustLimitList[i]).
-			set vecs[i]:START to engs[i]:position.
-		}
 	}
 	// <<
 	
@@ -669,7 +663,7 @@ function flightcontroller {
 		
 		
 		if mode = m_race {
-			set desiredHV to targetPosXcl:normalized * 250. 
+			set desiredHV to targetPosXcl:normalized * 350. 
 		}
 		else if submode = m_land and not(charging) set desiredHV to v(0,0,0).
 		else if submode = m_follow and targetPosXcl:mag < 10 and not charging {
@@ -707,25 +701,24 @@ function flightcontroller {
 			
 			local front_dist is vdot(tempFacing,gateDistVec).
 			//local cur_side_acc is vdot(gateSideVec,shipFacing) * maxHA. 
-			local side_acc is maxHA * 0.95 * min(1,max(0.5,(side_dist)/20)) * min(1,10/(TWR+5)).   //maxHA * 0.85 * min(1,max(0.5,(side_dist)/50)) * min(1,10/(TWR+5)).
-			set side_acc to side_acc / max(1,min(2,altErrAbs/8)).  
+			local side_acc is maxHA * 0.95 * min(1,max(0.5,(side_dist)/20)).// * min(1,10/(TWR+5)).   //maxHA * 0.85 * min(1,max(0.5,(side_dist)/50)) * min(1,10/(TWR+5)).
 			
 			//find the steering vector where acceleration is at max  
 			local maxSteeringVec is angleaxis(90 - maxNeutTilt, vcrs(upVector,gateSideVec)) * -gateSideVec. //angleaxis(90 - maxNeutTilt, -vcrs(upVector,-gateSideVec)) * -gateSideVec.
 			local angSteerError is vang(shipFacing,maxSteeringVec).
 			local adjustedDist is max(1,side_dist - (angSteerError/(2*maxNeutTilt)) * curSideSpeed ). // curSideSpeed * 1.5).
 			
-			local targetSideSpeed is min(side_dist^1.5,sqrt(2*max(0.01,adjustedDist - curSideSpeed*0.25)*side_acc)).  //min(side_dist^1.5,sqrt(2*(adjustedDist^0.9)*side_acc)). 
+			local targetSideSpeed is min(side_dist^1.5,sqrt(2*max(0.01,adjustedDist - curSideSpeed*0.2)*side_acc)).  //min(side_dist^1.5,sqrt(2*max(0.01,adjustedDist - curSideSpeed*0.15)*side_acc)).
 			
 			 
 			if behindGate { //drone is behind the gate  
-				set behindGate to true.
+				
 				//local aimPos is gateDistVec - gateSideVec * 16. //aim for 16m to the side of the gate    
 				local offsetGateSide is vcrs(upVector,gateDistVec):normalized.
 				if vdot(gateSideVec,offsetGateSide) > 0 set offsetGateSide to -offsetGateSide.
 				local aimPos is gateDistVec + offsetGateSide * min(80,18 + side_dist / 8).
 				//local aimSideDist is vxcl(gateFacing,aimPos):mag.
-				set desiredHV to aimPos:normalized * min(250,10 + sqrt(2* max(0.1,aimPos:mag - max(1,vdot(aimPos:normalized,h_vel))) * (maxHA*0.8))^0.95). 
+				set desiredHV to aimPos:normalized * min(250,25 + sqrt(2* max(0.1,aimPos:mag - max(1,vdot(aimPos:normalized,h_vel))) * (maxHA*0.8))^0.95). 
 			}
 			else { //in front of gate
 				set targetFrontSpeed to max(gateSpeed, gateSpeed + sqrt(2 * max(0.01,front_dist - abs(curForwardSpeed*0.5)) * (maxHA * 0.25))).
@@ -746,7 +739,7 @@ function flightcontroller {
 				//set targetFrontSpeed to min(targetFrontSpeed,max(40,max(1,front_dist)^1.2)/(side_acc_duration*2)).    
 				
 				//height error based limit
-				set targetFrontSpeed to min(targetFrontSpeed,(front_dist - 25) * 0.35 + 300 / max(1,(altErrAbs-1.5)*1.5)). // min(targetFrontSpeed,(front_dist - 15) * 0.25 + 300 / max(1,(altErrAbs-1.5)*2)). 
+				set targetFrontSpeed to min(targetFrontSpeed,(front_dist - 25) * 0.55 + 350 / max(1,(altErrAbs^1.3-1.5)*1.4)). // min(targetFrontSpeed,(front_dist - 15) * 0.25 + 300 / max(1,(altErrAbs-1.5)*2)). 
 			
 
 				//### desiredHV vector split into two components then merged again ###  
@@ -843,9 +836,9 @@ function flightcontroller {
 		if bootTime + 1 > timeSeconds and v_vel > -1 set desiredVAccVal to min(desiredVAccVal,gravityMag * 0.5). //limit throttle in the fist second after boot to avoid strange behavior
 		
 		
-		if desiredVAccVal < -gravityMag { 
+		if desiredVAccVal < 0 { // -gravityMag { 
 			//if mode = m_pos set desiredVAccVal to -gravityMag.
-			set desiredVAccVal to -gravityMag + (desiredVAccVal + gravityMag)/6. //  /4  
+			set desiredVAccVal to (desiredVAccVal)/4. //-gravityMag + (desiredVAccVal + gravityMag)/6. //  /4  
 		}
 		
 		set desiredVAcc to upVector * desiredVAccVal.
@@ -964,11 +957,23 @@ function flightcontroller {
 		set roll_distr to PID_roll:update(timeSeconds, roll_vel) / th. // / throt.
 		
 		
-		
-		set eng_pitch_pos["part"]:thrustlimit to 100 + pitch_distr.
-		set eng_pitch_neg["part"]:thrustlimit to 100 - pitch_distr.
-		set eng_roll_pos["part"]:thrustlimit to 100 + roll_distr.
-		set eng_roll_neg["part"]:thrustlimit to 100 - roll_distr.
+		for l in engsLexList {
+			local thisThrustLimit is min(100,100 + pitch_distr * l["pitchMod"] + roll_distr * l["rollMod"]).
+			set l["part"]:thrustlimit to thisThrustLimit.
+			
+			set l["thrustLimitDampened"] to l["thrustLimitDampened"] * 0.8 + (th * (thisThrustLimit)) * 0.2. 
+			if l["hasLight"]  {
+				l["lightModule"]:setfield("light r", th * l["thrustLimitDampened"]/66.66 - 0.5).
+				l["lightModule"]:setfield("light b", 1- th * l["thrustLimitDampened"]/66.66).
+			}
+			
+			if thMark {
+				
+				set l["vd"]:VEC to l["part"]:facing:vector * (1.5 * engDist * l["thrustLimitDampened"]/100).
+				set l["vd"]:START to l["part"]:position.
+			}
+			
+		}
 		
 		//since steering reduces effective thrust, up the throttle to match the intended thrust
 		local thrustDuringSteering is (400 - min(100,abs(pitch_distr)) - min(100,abs(roll_distr)))/400.
@@ -1030,6 +1035,7 @@ function flightcontroller {
 		if stMark or submode = m_free { 
 			set vecs[markHorV]:vec to h_vel/4.
 			set vecs[markDesired]:vec to desiredHV/4.
+			set vecs[markDesired]:label to round(desiredHV:mag):toString().
 		}
 		
 		//set vecs[markStar]:vec to facing:starvector*4.
@@ -1135,9 +1141,9 @@ function flightcontroller {
 			}
 		}
 		
+		for s in servoList s:setfield("target angle", targetRot * 1).
 		
-		servoKAL:setfield("play position", 350 + targetRot * 10).
-			
+		
 		 // << 
 		
 		// ###########################

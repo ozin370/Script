@@ -46,15 +46,32 @@ function nextGate {
 	local gateToNextGate is vxcl(upVector,nextTargetGate:position - targetGate:position).
 	local nextSideDist is vxcl(nextGateFacing,gateToNextGate):mag.
 	local nextGateBehind is vdot(targetGateFacing,gateToNextGate) < 0.
-	local facingAng is vang(targetGateFacing,nextGateFacing).
+	
 	
 	if (nextGateBehind) {
 		set gateSpeed to sqrt(2*(gateToNextGate:mag / 3)*maxHA).
 	}
+	else if (vdot(gateToNextGate, targetGate:facing:starvector) > 0) = (vdot(gateToNextGate, nextTargetGate:facing:starvector) > 0) { //s-turn
+		local facingAng is vang(targetGateFacing,gateToNextGate).
+		local nextFacingAng is vang(nextGateFacing,gateToNextGate).
+		
+		local midDist is -20 + gateToNextGate:mag /
+		(
+			1.5   
+			+ abs(90 - vang(up:vector, nextTargetGate:position - targetGate:position))/10 //lower speed with height slope
+			+ (facingAng + nextFacingAng)/30   //lower speed with more total angle of the two turns in the s turn
+		). 
+		set gateSpeed to sqrt(2  * max(0.1,midDist) * maxHA).
+		
+		popup("S-turn SL: " + round(gateSpeed) + "m/s").
+	}
 	else {
 		set nextGateSideVec to vcrs(upVector,nextGateFacing):normalized. //vector pointing out from the gate's *right* side
 		if vang(nextGateSideVec,vxcl(upVector,targetGate:position - nextTargetGate:position)) < 90 set nextGateSideVec to -nextGateSideVec. 
-			
+		
+		//set nextSideDist to nextSideDist / (1 + abs(90 - vang(up:vector, nextTargetGate:position - targetGate:position))/40). //lower speed with height slope
+		
+		
 		local gateSideSpeed is sqrt(2*nextSideDist*maxHA).
 		set nextSideDist to max(1,nextSideDist - gateSideSpeed * 0.5). //assume 0.5 second is used for orienting drone
 		set gateSideSpeed to sqrt(2*nextSideDist*maxHA).
@@ -62,29 +79,7 @@ function nextGate {
 	
 	}
 	
-	//old
-	//if facingAng < 45 or facingAng > 135 or nextGateBehind {
-	//	//new getespeed method
-	//	if facingAng > 135 and nextGateBehind set gateSpeed to 25.
-	//	else {
-	//		set gateSpeed to sqrt(2*(gateToNextGate:mag*0.5)*maxHA).
-	//		set nextSideDist to max(1,(gateToNextGate + targetGateFacing * gateSpeed * -0.5):mag * 0.5). //assume 0.5 second is used for orienting drone
-	//		set gateSpeed to sqrt(2*nextSideDist*maxHA).
-	//	}
-	//	
-	//}
-	//else {
-	//	set nextGateSideVec to vcrs(upVector,nextGateFacing):normalized. //vector pointing out from the gate's *right* side
-	//	if vang(nextGateSideVec,vxcl(upVector,targetGate:position - nextTargetGate:position)) < 90 set nextGateSideVec to -nextGateSideVec. 
-	//		
-	//	local gateSideSpeed is sqrt(2*nextSideDist*maxHA).
-	//	set nextSideDist to max(1,nextSideDist - gateSideSpeed * 0.5). //assume 0.5 second is used for orienting drone
-	//	set gateSideSpeed to sqrt(2*nextSideDist*maxHA).
-	//	global gateSpeed is gateSideSpeed / max(0.01,vdot(targetGateFacing,nextGateSideVec)).
-	//
-	//	//if facingAng > 90 set gateSpeed to gateSpeed * (vdot(nextGateSideVec,targetGateFacing)/1.2).
-	//}
-		
+	
 	
 	
 	

@@ -134,10 +134,8 @@ function toggleVelVec {
 function toggleThrVec {
 	parameter var.
 	set thMark to var.
-	set i to 0.
-	for eng in engs {
-		set vecs[i]:show to thMark.
-		set i to i + 1.
+	for m in engsLexList {
+		set m["vd"]:show to thMark.
 	}
 }
 function toggleAccVec {

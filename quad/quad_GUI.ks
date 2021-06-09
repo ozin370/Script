@@ -446,7 +446,12 @@ set style_label_compact:textcolor to rgb(1,1,1).
 				global stack_options is box_center:addstack().
 					global box_options is stack_options:addvlayout().
 					set box_options:style:margin:h to 0.
-						
+						global b_skip_frames is box_options:addcheckbox("IPU save mode",false).
+							set b_skip_frames:style:fontsize to 12.
+							
+							set skip_frames to false.
+							set b_skip_frames:ontoggle to { parameter val. set skip_frames to val. }.
+							
 						global b_auto_dock is box_options:addcheckbox("Auto dock on low fuel",false).
 							set b_auto_dock:style:fontsize to 12.
 							if autoFuel set b_auto_dock:pressed to true.
@@ -475,12 +480,6 @@ set style_label_compact:textcolor to rgb(1,1,1).
 							set b_vd_attitude:style:fontsize to 12.
 							set b_vd_attitude:ontoggle to { parameter val. toggleAccVec(val). }.
 						
-						box_options:addspacing(5).
-						global b_skip_frames is box_options:addcheckbox("IPU save mode",false).
-							set b_skip_frames:style:fontsize to 12.
-							
-							set skip_frames to false.
-							set b_skip_frames:ontoggle to { parameter val. set skip_frames to val. }.
 						box_options:addspacing(-1).
 				
 			//<<
@@ -728,11 +727,11 @@ function selectMode { //this is called whenever a new mode is selected in the me
 		set submode to m_pos.
 		
 		set gravitymod to 1.2. //1.2
-		set thrustmod to 0.99. //.95  
+		set thrustmod to 0.95. //.95  
 		set PID_pitch:kp to 85. 
 		set PID_roll:kp to 85.
 		set angVelMult to 0.18.
-		set climbDampening to 0.3. //0.3
+		set climbDampening to 0.1. //0.3
 		
 		setLights(1,0.5,0).
 		if not(defined raceLaps) global raceLaps is 0.

@@ -80,71 +80,88 @@ for eng in engs {
 		}
 		
 		if mod:hasevent("Set Reverse Thrust") {
-			//set canReverse to true.
+			set canReverse to true.
 			set thisEngineCanReverse to true.
 			set reverseMod to mod.
 		}
 		
 	}
 	
+	
 	global currentLex is lexicon(). //temporary dummy lex
+	currentLex:add("part",eng).
 	//assign engines as pitch/roll
-	if vdot(facing:starvector,eng:position) < -0.3 {
-		set eng_roll_pos to lexicon().
-		engsLexList:add(eng_roll_pos).
-		eng_roll_pos:add("part",eng).
-		if thisEngineCanReverse set currentLex to eng_roll_pos.
+	if vdot(facing:starvector,eng:position) < -0.3 { 
+		set eng_roll_pos to currentLex.
+		currentLex:add("pitchMod",0).
+		currentLex:add("rollMod",1). 
 	}
 	else if vdot(facing:starvector,eng:position) > 0.3 {
-		set eng_roll_neg to lexicon().
-		engsLexList:add(eng_roll_neg).
-		eng_roll_neg:add("part",eng).
-		if thisEngineCanReverse set currentLex to eng_roll_neg.
+		set eng_roll_neg to currentLex.
+		currentLex:add("pitchMod",0).
+		currentLex:add("rollMod",-1).
 	}
 	else if vdot(facing:topvector,eng:position) < -0.3 {
-		set eng_pitch_pos to lexicon().
-		engsLexList:add(eng_pitch_pos).
-		eng_pitch_pos:add("part",eng).
-		if thisEngineCanReverse set currentLex to eng_pitch_pos.
+		set eng_pitch_pos to currentLex.
+		currentLex:add("pitchMod",1).
+		currentLex:add("rollMod",0).
+		
 	}
 	else if vdot(facing:topvector,eng:position) > 0.3 {
-		set eng_pitch_neg to lexicon().
-		engsLexList:add(eng_pitch_neg).
-		eng_pitch_neg:add("part",eng).
-		if thisEngineCanReverse set currentLex to eng_pitch_neg.
+		set eng_pitch_neg to currentLex.
+		currentLex:add("pitchMod",-1).
+		currentLex:add("rollMod",0).
 	}
 	
-	
+	currentLex:add("canReverse",thisEngineCanReverse).
 	if thisEngineCanReverse {
-		currentLex:add("canReverse",true).
 		currentLex:add("reverseMod",reverseMod).
 		currentLex:add("inReverse",false).
 	}
 	
+	set haslight to false.
+	for p in eng:parent:parent:children {
+		for ms in p:modules {
+			local m is p:getmodule(ms).
+			if m:hasfield("light r") {
+				set haslight to true.
+				currentLex:add("lightModule",m).
+			}
+		}
+	}
+	currentLex:add("hasLight",haslight).
+	currentLex:add("thrustLimitDampened", eng:thrustlimit).
+	
+	currentLex:add("vd",vecdraw(eng:position,eng:facing:vector * eng:thrust,red,"",1, false, 0.3)).
+	
+	engsLexList:add(currentLex).
 	set engDist to engDist + vxcl(facing:vector,eng:position):mag.
 }
 set engDist to engDist/4.
 if deploying { entry("Deploying propellers.."). wait 2. }
 
 
+set servoList to list().
 set i to 0.
 for eng in engs {
 	if not(eng:ignition) { eng:activate(). wait 0. }
-	vecs_add(eng:position,eng:facing:vector * eng:thrust,red,"",0.2).
-	set vecs[i]:show to false.
+	
 	set eng:thrustlimit to 100.
 	
 	//check for yaw servos
 	if eng:parent:hasmodule("ModuleRoboticRotationServo") {
 		set rot to eng:parent:getmodule("ModuleRoboticRotationServo").
-		rot:setfield("damping", 20).
+		rot:setfield("damping", 0).
+		servoList:add(rot).
 	}
 	
 	set i to i + 1.
 }
 
-set servoKAL to ship:modulesnamed("ModuleRoboticController")[0].
+//set servoKAL to ship:modulesnamed("ModuleRoboticController")[0].
 
+
+wait random().
 setLights(0,1,0).
 // <<
 
@@ -457,6 +474,7 @@ function getTorque {
 	parameter p. 
 	return vxcl(shipFacing,p:position):mag * (p:maxthrust * vdot(shipFacing,p:facing:vector)).
 }
+
 set pitch_torque to (getTorque(eng_pitch_pos["part"]) + getTorque(eng_pitch_neg["part"])) / 2.
 set roll_torque to (getTorque(eng_roll_pos["part"]) + getTorque(eng_roll_neg["part"])) / 2.
 
@@ -505,7 +523,8 @@ set TWR to (ship:maxthrust / adjustedMass)/9.81.
 set v_acc_e_old to 0.
 set h_acc_e_old to v(0,0,0).
 global tOld is time:seconds. global velold is velocity:surface. global dT is 1. global tarVelOld is v(0,0,0).
-global tHeight is round(min(10,alt:radar + 4),2).
+global tHeight is round(min(10,alt:radar + 3.5),2).
+set g_height:value to tHeight.
 global posI is 0.
 global accI is 0.
 global throtOld is 0.
@@ -712,7 +731,7 @@ if hasGimbal {
 	rotVMod:doaction("move +",false). rotVMod:doaction("move -",false). 
 }
 
-servoKAL:setfield("play position", 350).
+for s in servoList  s:setfield("target angle", 0).
 
 set th to throt.
 unlock throttle.
