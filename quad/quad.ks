@@ -132,7 +132,7 @@ for eng in engs {
 	currentLex:add("hasLight",haslight).
 	currentLex:add("thrustLimitDampened", eng:thrustlimit).
 	
-	currentLex:add("vd",vecdraw(eng:position,eng:facing:vector * eng:thrust,red,"",1, false, 0.3)).
+	currentLex:add("vd",vecdraw(eng:position,eng:facing:vector * eng:thrust,red,"",1, false, 0.3, true, false)).
 	
 	engsLexList:add(currentLex).
 	set engDist to engDist + vxcl(facing:vector,eng:position):mag.
@@ -151,7 +151,7 @@ for eng in engs {
 	//check for yaw servos
 	if eng:parent:hasmodule("ModuleRoboticRotationServo") {
 		set rot to eng:parent:getmodule("ModuleRoboticRotationServo").
-		rot:setfield("damping", 0).
+		rot:setfield("damping", 150).
 		servoList:add(rot).
 	}
 	
@@ -572,7 +572,12 @@ set showstats to false.
 set fuelRate to 0.
 set lastFuel to 100.
 set localFocusPos to v(0,0,0).
-
+set thAvg to 0.
+set correctingYaw to false.
+set gravityMag to body:mu / body:position:sqrmagnitude.
+set upVector to up:vector.
+set gravity to -upVector * gravityMag.
+set weightRatio to gravityMag/9.81.
 
 global doFlip is false.
 set dTavg to 0.02. 
@@ -600,10 +605,10 @@ if hasMS {
 
 //### PID controllers ###
 //>>
-
-global PID_pitch is pidloop(50, 0, 0.3, -100, 100). //(75, 0, 2, -100, 100).  
+set base_kP to 50.
+global PID_pitch is pidloop(base_kP, 0, 0.3, -150, 150). //(75, 0, 2, -100, 100).  
 //global PID_pitch is P_init(50.0,-100,100). //P_init(50.0,-100,100). 
-global PID_roll is pidloop(50, 0, 0.3, -100, 100). //(75, 0, 2, -100, 100).
+global PID_roll is pidloop(base_kP, 0, 0.3, -150, 150). //(75, 0, 2, -100, 100).
 //global PID_roll is P_init(50.0,-100,100). //P_init(50.0,-100,100). 
 
 if true {
@@ -620,15 +625,13 @@ if true {
 		return true.
 	}
 	on ag3 {
-		set PID_pitch:kP to PID_pitch:kP - 10.
-		set PID_roll:kP to PID_roll:kP - 10.
-		popup("Engine balance PID kP: " + PID_pitch:kP). 
+		set base_kP to base_kP * 0.75.
+		popup("Engine balance PID kP: " + base_kP). 
 		return true.
 	}
 	on ag4 {
-		set PID_pitch:kP to PID_pitch:kP + 10.
-		set PID_roll:kP to PID_roll:kP + 10.
-		popup("Engine balance PID kP: " + PID_pitch:kP).
+		set base_kP to base_kP * 1.25.
+		popup("Engine balance PID kP: " + base_kP).
 		return true.
 	}
 	on ag5 {
@@ -733,9 +736,9 @@ if hasGimbal {
 
 for s in servoList  s:setfield("target angle", 0).
 
-set th to throt.
+set th to 0.
 unlock throttle.
-set ship:control:pilotmainthrottle to throt.
+set ship:control:pilotmainthrottle to 0.
 entry("Program ended.").
 setLights(1,0.1,0.1).
 wait 0.2.

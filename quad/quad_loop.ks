@@ -85,21 +85,26 @@ function initializeTrigger { //called once by quad.ks right before flightcontrol
 }
 
 function flightcontroller {
-	// <<
+	
 	formationComUpdate(). //check messages
 	
 	if hasPort { // IS DOCKED CHECK
-		local portSatus is localPort:state.
-		if portSatus = "Docked (docker)" or portSatus = "Docked (dockee)" set isDocked to true.
-		else set isDocked to false.
+		set isDocked to localPort:state:contains("Dock").
 	}
 	
 	// ########################
 	// ### THRUST AND STUFF ###
 	// >>
+	//set totalThrust to v(0,0,0).
+	//for i in range(4) { //engine vecdraws and thrust vector
+	//	set totalThrust to totalThrust + engs[i]:facing:vector * engs[i]:thrust.
+	//}
 	set totalThrust to v(0,0,0).
-	for i in range(4) { //engine vecdraws and thrust vector
-		set totalThrust to totalThrust + engs[i]:facing:vector * engs[i]:thrust.
+	for l in engsLexList {
+		if l["inReverse"]
+			set totalThrust to totalThrust + l["part"]:facing:vector * (-1 * l["part"]:thrust).
+		else
+			set totalThrust to totalThrust + l["part"]:facing:vector * l["part"]:thrust.
 	}
 	// <<
 	
@@ -151,15 +156,14 @@ function flightcontroller {
 			
 		
 			set upVector to up:vector.
-			set gravityMag to body:mu / body:position:sqrmagnitude.
-			set gravity to -upVector * gravityMag.
-		
+			
+			set adjustedMass to mass + massOffset.
 			set maxThr to ship:maxthrust. //ship:maxthrustat(1). 
 			set maxTWR to maxThr / adjustedMass.
 			set TWR to maxTWR/9.81.
 		
-			set weightRatio to gravityMag/9.81.
-			set adjustedMass to mass + massOffset.
+			
+			
 			
 			set PID_hAcc:maxoutput to maxTWR.
 			set PID_vAcc:maxoutput to maxTWR.
@@ -187,8 +191,7 @@ function flightcontroller {
 		set slowTimer to timeSeconds.
 		set forceUpdate to false.
 	} // << ### end of SLOW TICK
-	
-	set throt to totalThrust:mag/maxThr.
+
 	set maxTWRVec to shipFacing * maxTWR.
 	//set availableTWR to availableTWR * 0.95 + 0.05 * (ship:availablethrust / adjustedMass). 
 	
@@ -248,8 +251,7 @@ function flightcontroller {
 					set tarPart to aimPoints[0].
 					set aimPoint to true.
 					
-					set PID_pitch:kp to 35.
-					set PID_roll:kp to 35.
+					
 					
 					tarVeh:connection:sendmessage("dock").
 				}
@@ -315,6 +317,8 @@ function flightcontroller {
 				wait 0.1.
 				tarVeh:connection:sendmessage("undock").
 				
+				set base_kP to 50.
+				
 				set forceUpdate to true.
 				set freeSpeed to 0.
 				set mode to old_mode.
@@ -351,8 +355,7 @@ function flightcontroller {
 				
 				lock throttle to 1. wait 0.4. set lockToggle to true.  
 				
-				set PID_pitch:kp to 75.
-				set PID_roll:kp to 75.
+				
 				
 				set vecs[markHorV]:START to v(0,0,0). 
 				set vecs[markDesired]:START to v(0,0,0).
@@ -393,7 +396,6 @@ function flightcontroller {
 		// ### VARS AND TARGETS ###
 		// >>
 		set v_vel to verticalspeed.
-		set v_vel_abs to abs(v_vel).
 		set h_vel to vxcl(upVector,shipVelocitySurface).
 		set h_vel_mag to h_vel:mag.
 		
@@ -413,7 +415,7 @@ function flightcontroller {
 			
 			//autodock
 			if charging and submode = m_follow and not aimPoint {
-				if vxcl(upVector, targetPos):mag < 0.3 and relativeV:mag < 0.1 and v_vel_abs < 1 and abs(altErr) < 1 {
+				if vxcl(upVector, targetPos):mag < 0.3 and relativeV:mag < 0.1 and abs(v_vel) < 1 and abs(altErr) < 1 {
 					set mode to m_land.
 					set submode to m_land.
 				}
@@ -470,31 +472,6 @@ function flightcontroller {
 		set v_acc to vdot(upVector, v_dif).
 		// <<
 		
-		// ########################
-		// ### MASS CALIBRATION ###
-		// >>
-		if hasWinch {
-			set acc_expected to totalThrust/adjustedMass + gravity.
-			set v_acc_expected to vdot(upVector, acc_expected).
-			//set v_acc_e_old to v_acc_expected.
-			
-			if shipVelocitySurface:mag < 0.5 and abs(throt - throtOld) < 0.01 { // and not(submode = m_land) {
-				set v_acc_difference to  v_acc_expected - v_acc.
-				set acc_list[accI] to v_acc_difference.
-				if accI = 4 set accI to 0.
-				else set accI to accI + 1.
-				set acc_sum to 0. for acc_dif in acc_list {
-					set acc_sum to acc_sum + acc_dif.
-				}
-				set v_acc_dif_average to acc_sum/20.
-				//set adjustedMass to adjustedMass + 0.01 * v_acc_dif_average.
-				set massOffset to max(-mass*0.05,massOffset + mass * 0.04 * v_acc_dif_average).
-				set adjustedMass to mass + massOffset.
-			}
-			
-			set throtOld to throt.
-		}	
-		// <<
 		
 		// #########################
 		// ### TERRAIN DETECTION ###
@@ -631,7 +608,7 @@ function flightcontroller {
 		
 		
 		//set speedlimit to min(speedlimitmax,30*TWR).
-		
+		set targetV to v(0,0,0).
 		if submode = m_free {
 			set targetPosXcl to heading(freeHeading,0):vector * 10000.
 			set speedlimit to freeSpeed.
@@ -640,13 +617,6 @@ function flightcontroller {
 			set targetPosXcl to vxcl(upVector, targetPos).
 			set targetPosXcl:mag to targetPosXcl:mag - followDist.
 			set speedlimit to speedlimitmax.
-		}
-		else if mode = m_patrol set speedlimit to freeSpeed.
-		else set speedlimit to speedlimitmax.
-		
-		
-		
-		if submode = m_follow or (submode = m_land and charging) { 
 			
 			if (timeSeconds - formationLastUpdate < 0.5) {
 				set targetV to formationTarget[1].
@@ -659,7 +629,8 @@ function flightcontroller {
 				set targetV to tarVel.
 			}
 		}
-		else set targetV to v(0,0,0).
+		else if mode = m_patrol set speedlimit to freeSpeed.
+		else set speedlimit to speedlimitmax.
 		
 		
 		if mode = m_race {
@@ -721,7 +692,7 @@ function flightcontroller {
 				set desiredHV to aimPos:normalized * min(250,25 + sqrt(2* max(0.1,aimPos:mag - max(1,vdot(aimPos:normalized,h_vel))) * (maxHA*0.8))^0.95). 
 			}
 			else { //in front of gate
-				set targetFrontSpeed to max(gateSpeed, gateSpeed + sqrt(2 * max(0.01,front_dist - abs(curForwardSpeed*0.5)) * (maxHA * 0.25))).
+				set targetFrontSpeed to max(gateSpeed, gateSpeed + sqrt(2 * max(0.01,front_dist - abs(curForwardSpeed*0.5)) * (maxHA * 0.45))).
 				set targetFrontSpeed to min(targetFrontSpeed,350).  
 				
 				if side_dist > 5 { //6.5
@@ -731,9 +702,10 @@ function flightcontroller {
 					set targetFrontSpeed to min(targetFrontSpeed,forwardLimit).
 					
 				}
-				else if front_dist/max(1,curForwardSpeed) < 0.4 { //start turning towards next gate when very close
+				else if front_dist/max(1,curForwardSpeed) < 0.55 { //start turning towards next gate when very close
+					
 					local gate_eta is front_dist/max(1,curForwardSpeed).
-					set tempFacing to (tempFacing * gate_eta +  gateFacingAtMax * (0.4 - gate_eta)):normalized.
+					set tempFacing to (tempFacing * gate_eta +  gateFacingAtMax * (0.55 - gate_eta)):normalized.
 				}
 				
 				//set targetFrontSpeed to min(targetFrontSpeed,max(40,max(1,front_dist)^1.2)/(side_acc_duration*2)).    
@@ -833,12 +805,11 @@ function flightcontroller {
 		
 		
 		set desiredVAccVal to PID_vAcc:update(timeSeconds, -stVVec).
-		if bootTime + 1 > timeSeconds and v_vel > -1 set desiredVAccVal to min(desiredVAccVal,gravityMag * 0.5). //limit throttle in the fist second after boot to avoid strange behavior
 		
 		
-		if desiredVAccVal < 0 { // -gravityMag { 
-			//if mode = m_pos set desiredVAccVal to -gravityMag.
-			set desiredVAccVal to (desiredVAccVal)/4. //-gravityMag + (desiredVAccVal + gravityMag)/6. //  /4  
+		if desiredVAccVal < -gravityMag { //  { //desiredVAccVal < 0
+			
+			set desiredVAccVal to -gravityMag + (gravityMag+desiredVAccVal)/4. //-gravityMag + (desiredVAccVal + gravityMag)/6. //  /4  
 		}
 		
 		set desiredVAcc to upVector * desiredVAccVal.
@@ -948,36 +919,56 @@ function flightcontroller {
 		}
 		
 		if vang(targetVec,shipFacing) > 5 or max(abs(pitch_vel),abs(roll_vel)) > 0.2 set th to max(th,thMid * 0.5). //give a bit of extra power to steer when needed.
-		//set throt to max(0.01,th).
 		
+		
+		set PID_pitch:kP to base_kP / th.
 		set PID_pitch:setpoint to pitch_vel_target.
-		set pitch_distr to PID_pitch:update(timeSeconds, pitch_vel) / th. // / throt.
+		set pitch_distr to PID_pitch:update(timeSeconds, pitch_vel). // / ((1+th)/2). // / throt.
 		
+		set PID_roll:kP to base_kP / th.
 		set PID_roll:setpoint to roll_vel_target.
-		set roll_distr to PID_roll:update(timeSeconds, roll_vel) / th. // / throt.
+		set roll_distr to PID_roll:update(timeSeconds, roll_vel). // / ((1+th)/2).// / th. // / throt.
 		
+		
+		set thrustDuringSteering to 0.
 		
 		for l in engsLexList {
 			local thisThrustLimit is min(100,100 + pitch_distr * l["pitchMod"] + roll_distr * l["rollMod"]).
-			set l["part"]:thrustlimit to thisThrustLimit.
+			if th > 0.7 set thisThrustLimit to max(0, thisThrustLimit).
+			set thrustDuringSteering to thrustDuringSteering + thisThrustLimit.
 			
-			set l["thrustLimitDampened"] to l["thrustLimitDampened"] * 0.8 + (th * (thisThrustLimit)) * 0.2. 
+			if thisThrustLimit < 0 and not (l["inReverse"]) {
+				l["reverseMod"]:doaction("set reverse thrust", true).
+				set l["inReverse"] to true.
+			}
+			else if thisThrustLimit >= 0 and l["inReverse"] {
+				l["reverseMod"]:doaction("set normal thrust", true).
+				set l["inReverse"] to false.
+			}
+			set l["part"]:thrustlimit to abs(thisThrustLimit).
+
 			if l["hasLight"]  {
-				l["lightModule"]:setfield("light r", th * l["thrustLimitDampened"]/66.66 - 0.5).
-				l["lightModule"]:setfield("light b", 1- th * l["thrustLimitDampened"]/66.66).
+				l["lightModule"]:setfield("light r",  thisThrustLimit/66.66 - 0.5).
+				l["lightModule"]:setfield("light b", 1-  thisThrustLimit/66.66).
 			}
 			
 			if thMark {
-				
-				set l["vd"]:VEC to l["part"]:facing:vector * (1.5 * engDist * l["thrustLimitDampened"]/100).
+				set l["vd"]:VEC to l["part"]:facing:vector * (min(1,th) * 1.5 * engDist * thisThrustLimit/100).
 				set l["vd"]:START to l["part"]:position.
+				set l["vd"]:color to rgb(thisThrustLimit/100, 0, 1-thisThrustLimit/100).
 			}
+			
 			
 		}
 		
 		//since steering reduces effective thrust, up the throttle to match the intended thrust
-		local thrustDuringSteering is (400 - min(100,abs(pitch_distr)) - min(100,abs(roll_distr)))/400.
-		set th to min(1,th / thrustDuringSteering).
+		
+		set thrustDuringSteering to max(0.1,thrustDuringSteering / 400).
+		set thAvg to thrustDuringSteering * 0.6 + thAvg * 0.4.
+		//local thrustDuringSteering is (400 - min(100,abs(pitch_distr)) - min(100,abs(roll_distr)))/400.
+		
+		
+		set th to min(1,th / thAvg).
 		
 		if doFlip {
 			if tilt < 120 set th to 1.
@@ -1046,7 +1037,6 @@ function flightcontroller {
 		// ################
 		// ### Terminal ###
 		// >>
-		set dTavg to dTavg * 0.80 + dT * 0.20.
 		set title_hz:text to round(1/dT) + "hz".
 		set title_ipu:text to round(core:getfield("kOS average power") / 0.0002) + "i".
 		
@@ -1115,11 +1105,12 @@ function flightcontroller {
 		if ship:control:pilotroll > 0 set targetRot to 20 - th * 16.
 		else if ship:control:pilotroll < 0 set targetRot to -20 + (th * 16).
 		else {
-			if abs(yawAngVel) > 0.005 { 
+			if abs(yawAngVel) > (choose 0.001 if correctingYaw else 0.008) { 
 				set targetRot to min(35,abs(yawAngVel) * 40 * (5/TWR) * (1.25 - th)).   
-				if yawAngVel < 0 set targetRot to -targetRot. 
+				if yawAngVel < 0 set targetRot to -targetRot.
+				correctingYaw on.
 			}
-			else set targetRot to 0.
+			else { set targetRot to 0. correctingYaw off. }
 		}
 		
 		if charging { //roll to keep a 45 degree roll compared to target facing while docking 

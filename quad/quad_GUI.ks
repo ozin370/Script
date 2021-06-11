@@ -728,8 +728,7 @@ function selectMode { //this is called whenever a new mode is selected in the me
 		
 		set gravitymod to 1.2. //1.2
 		set thrustmod to 0.95. //.95  
-		set PID_pitch:kp to 85. 
-		set PID_roll:kp to 85.
+		set base_kP to 65. 
 		set angVelMult to 0.18.
 		set climbDampening to 0.1. //0.3
 		
