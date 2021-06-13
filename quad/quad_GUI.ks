@@ -763,7 +763,6 @@ function selectMode { //this is called whenever a new mode is selected in the me
 		set PID_pitch:kp to 75. //75 
 		set PID_roll:kp to 75. //75 
 		set climbDampening to 0.15.
-		set vecs[markGate]:show to false.
 		setLights(0,1,0).
 		
 		set PID_hAcc to pidloop(1.6 * ipuMod,0,0.2 + 1 - weightRatio,0,90). //set PID_hAcc to pidloop(1.6 * ipuMod,0,0.2 + 1 - weightRatio,0,90).    

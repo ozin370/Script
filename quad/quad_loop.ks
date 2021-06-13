@@ -23,26 +23,17 @@ function initializeTrigger { //called once by quad.ks right before flightcontrol
 	}
 	
 	when true then {
-	
 		set shipFacing to facing:vector.
 		set shipVelocitySurface to velocity:surface.
 		set timeSeconds to time:seconds.
-		
-		
-		// ####################
-		// ### Turret / Cam ###
-		// >>
-		if hasGimbal { // gimbal camera (hull cam) 
-			set dT2 to max(0.02,timeSeconds - tOld2).
-			set tOld2 to timeSeconds.
-		}
-		// <<
-		
 		return true.
 	}
 	
 	if hasGimbal { 
 		when true then {
+			set dT2 to max(0.02,timeSeconds - tOld2).
+			set tOld2 to timeSeconds.
+			
 			if hastarget or desiredHV:mag > 1 or kuniverse:activevessel <> ship {
 				if hastarget set localFocusPos to target:position - (cam:position + h_vel * 0.04).
 				else if kuniverse:activevessel <> ship set localFocusPos to kuniverse:activevessel:position - (cam:position + h_vel * 0.04).
@@ -192,9 +183,7 @@ function flightcontroller {
 		set forceUpdate to false.
 	} // << ### end of SLOW TICK
 
-	set maxTWRVec to shipFacing * maxTWR.
-	//set availableTWR to availableTWR * 0.95 + 0.05 * (ship:availablethrust / adjustedMass). 
-	
+
 	// ##################################
 	// ### Fuel stuff and autodocking ###
 	// >>
@@ -434,16 +423,20 @@ function flightcontroller {
 			
 			//is the drone in the approach angle cone?
 			if behindGate set tempFacing to gateFacing.
-			else if vang(gateDistVec,gateFacing) < abs(maxApproachAngle) and vang(gateDistVec,gateFacingAtMax) < abs(maxApproachAngle) set tempFacing to gateDistVecOld:normalized.
-			//if not, what edge is it closest to?
-			else if vang(gateDistVec,gateFacing) > vang(gateDistVec,gateFacingAtMax) set tempFacing to gateFacingAtMax.
-			else set tempFacing to gateFacing. 
+			else if vang(gateDistVec,gateFacing) < abs(maxApproachAngle) and vang(gateDistVec,gateFacingAtMax) < abs(maxApproachAngle) {
+				set tempFacing to gateDistVecOld:normalized.
 				
-			set gateDistVecOld to gateDistVec * 0.2 + gateDistVecOld * 0.8.
+				set gateDistVecOld to (vxcl(gateDistVec,gateFacingAtMax) * gateDist/8 + gateDistVec) * 0.1 + gateDistVecOld * 0.9.
+			}
+			//if not, what edge is it closest to?
+			else if vang(gateDistVec,gateFacing) > vang(gateDistVec,gateFacingAtMax) { set tempFacing to gateFacingAtMax. set gateDistVecOld to gateDistVec. }
+			else { set tempFacing to gateFacing. set gateDistVecOld to gateDistVec. }
+				
+			
 			
 			set gateSideVec to vcrs(upVector,tempFacing):normalized. 
 			if vang(gateSideVec,-gateDistVec) < 90 set gateSideVec to -gateSideVec. //pointing towards the center line  
-			set side_dist to abs(vdot(gateSideVec,gateDistVec)).
+			set side_dist to vdot(gateSideVec,gateDistVec).
 			
 			if gateCorner set gateOffset to min(25,(side_dist + altErrAbs)/2). // - h_vel_mag/4. 
 			else set gateOffset to min(350,(side_dist + altErrAbs)/2). //  min(350,side_dist/1.5)
@@ -456,7 +449,6 @@ function flightcontroller {
 			
 			//gate intersect detection and finding the next gate  
 			if detectIntersect() { nextGate(). }
-			//set vecs[markGate]:start to targetGatePos + upVector * 50.
 			
 		}
 		else set targetPos to targetGeoPos:position.
@@ -634,7 +626,8 @@ function flightcontroller {
 		
 		
 		if mode = m_race {
-			set desiredHV to targetPosXcl:normalized * 350. 
+			set desiredHV to targetPosXcl:normalized * 350.
+			
 		}
 		else if submode = m_land and not(charging) set desiredHV to v(0,0,0).
 		else if submode = m_follow and targetPosXcl:mag < 10 and not charging {
@@ -671,6 +664,7 @@ function flightcontroller {
 			
 			
 			local front_dist is vdot(tempFacing,gateDistVec).
+			set vd_gate:width to 1 - max(0.1,front_dist/900).
 			//local cur_side_acc is vdot(gateSideVec,shipFacing) * maxHA. 
 			local side_acc is maxHA * 0.95 * min(1,max(0.5,(side_dist)/20)).// * min(1,10/(TWR+5)).   //maxHA * 0.85 * min(1,max(0.5,(side_dist)/50)) * min(1,10/(TWR+5)).
 			
@@ -693,16 +687,16 @@ function flightcontroller {
 			}
 			else { //in front of gate
 				set targetFrontSpeed to max(gateSpeed, gateSpeed + sqrt(2 * max(0.01,front_dist - abs(curForwardSpeed*0.5)) * (maxHA * 0.45))).
-				set targetFrontSpeed to min(targetFrontSpeed,350).  
+				set targetFrontSpeed to min(targetFrontSpeed,310).  
 				
-				if side_dist > 5 { //6.5
+				if side_dist > 4.5 { //6.5
 					//local forwardLimit is tan(vang(gateSideVec,desiredHV)) * max(5,targetSideSpeed).  // * max(5,targetSideSpeed).
 					local forwardLimit is tan(vang(gateSideVec,desiredHV)) * max(15,targetSideSpeed).  // * max(5,targetSideSpeed).
 					if vdot(desiredHV,tempFacing) < 0 set forwardLimit to -forwardLimit.
 					set targetFrontSpeed to min(targetFrontSpeed,forwardLimit).
 					
 				}
-				else if front_dist/max(1,curForwardSpeed) < 0.55 { //start turning towards next gate when very close
+				else if front_dist/max(1,curForwardSpeed) < 0.55 and side_dist < 3 { //start turning towards next gate when very close
 					
 					local gate_eta is front_dist/max(1,curForwardSpeed).
 					set tempFacing to (tempFacing * gate_eta +  gateFacingAtMax * (0.55 - gate_eta)):normalized.
@@ -730,7 +724,7 @@ function flightcontroller {
 				local forwardFactor is max(0.15,targetGatePos:mag/800). //increase side priority as we get closer 
 				set forwardFactor to max(forwardFactor,1 - abs(curSideSpeed/(TWR*2))). //but increase it up to full if we're already aimed
 				set forwardFactor to min(forwardFactor,0.9).
-				set stVec to vxcl(tempFacing,stVec) * 1.5 + tempFacing * vdot(tempFacing,stVec) * forwardFactor.
+				set stVec to vxcl(tempFacing,stVec) * 1.6 + tempFacing * vdot(tempFacing,stVec) * forwardFactor.
 			}
 			
 			//set stVec to tempFacing * vdot(tempFacing,stVec) + gateSideVec * vdot(gateSideVec,stVec) * (1 + min(0.0,side_dist/50)).   
@@ -739,10 +733,10 @@ function flightcontroller {
 			//set v1 to vecdraw(v(0,0,0) + h_vel/2,stVec/2,green,"",1,true,0.2). //stvec
 			//set v2 to vecdraw(v(0,0,0),maxSteeringVec * 4,magenta,"",1,true,0.2).
 			
-			//local gateVecdrawPos is ship:body:geopositionof(targetGatePos):position + upVector * 0.3.
-			//set v3 to vecdraw(gateVecdrawPos - gateFacing * 1000,gateFacing*2000,rgba(1,1,1,0.5),"",1,true,1). //mid line
-			//set v4 to vecdraw(gateVecdrawPos,-gateFacingAtMax*1000,rgba(1,1,1,0.5),"",1,true,1). //max approach ang line
-			//set vec_tempFacingLine to vecdraw(gateVecdrawPos,-tempFacing*1000,rgba(1,0,0,1),"",1,true,1.2). //cur approach ang line 
+			local gateVecdrawPos is ship:body:geopositionof(targetGatePos):position + upVector * 0.3.
+			set v3:vec to gateFacing*2000. set v3:start to gateVecdrawPos - gateFacing * 1000. //mid line
+			set v4:start to gateVecdrawPos. set v4:vec to -gateFacingAtMax*1000. //max approach ang line
+			set vec_tempFacingLine:start to gateVecdrawPos. set vec_tempFacingLine:vec to -tempFacing*1000.  //cur approach ang line 
 			//set vec_targetPos to vecdraw(targetPos + upVector * 4,-upVector*4,rgba(1,1,0,1),"",1,true,2).
 			//set vec_altErr to vecdraw(v(0,0,0),upVector*altErr,rgba(1,1,0,0.5),"",1,true,0.2).
 				
@@ -853,7 +847,7 @@ function flightcontroller {
 			set rotAx to -vcrs(targetVec, upVector).
 			set targetVec to upVector.
 			set targetVec to angleaxis(tiltCap, rotAx) * targetVec.
-		}
+		} 
 		
 		if doFlip {
 			if desiredHV:mag < 1 set rotAx to north:vector.
@@ -868,7 +862,7 @@ function flightcontroller {
 		// ################
 		// ### Throttle ###
 		// >>
-		set curMaxVAcc to vdot(upVector,maxTWRVec).
+		set curMaxVAcc to maxTWR * vdot(upVector,shipFacing).
 		set thMid to gravityMag / curMaxVAcc. //the throttle to keep vertical acceleration at 0 with the current tilt 
 		if curMaxVAcc < 0.0001 set thMid to 1.
 		

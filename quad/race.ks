@@ -21,7 +21,7 @@ function listGates {
 
 
 function nextGate {
-	if not(defined vd_gate) global vd_gate to vecdraw( {return v(0,0,0).}, up:vector * -35, rgba(0,1,0,0.3), "", 1, true, 1).
+	if not(defined vd_gate) global vd_gate to vecdraw( {return v(0,0,0).}, up:vector * -50, rgba(0.1,0.5,0.1,0.6), "", 1, true, 1, true, true).
 	
 	set gateI to gateI + 1.
 	if gateI = gatesList:length set gateI to 0.
@@ -34,7 +34,7 @@ function nextGate {
 	global gateLeft is targetGate:partstagged("left")[0].
 	global gateRight is targetGate:partstagged("right")[0].
 	global gateHeight is max(0,targetGate:geoposition:terrainheight).
-	set vd_gate:startupdater to { return targetGate:position + up:vector * 50. }.
+	set vd_gate:startupdater to { return targetGate:position + up:vector * 60. }.
 	
 	if targetGate:rootpart:tag = "corner" set gateCorner to true.
 	else set gateCorner to false.

@@ -244,7 +244,6 @@ global markHorV is vecs_add(v(0,0,0),v(0,0,0),blue,"vel",0.3).
 global markDesired is vecs_add(v(0,0,0),v(0,0,0),yellow,"",0.3).
 global markVMod is vecs_add(v(0,0,0),v(0,0,0),green,"",0.2).
 global markDestination is vecs_add(v(0,0,0),-up:vector * 3,rgb(1,0.8,0),"",0.2).
-global markGate is vecs_add(v(0,0,0),-up:vector * 40,rgb(0,1,0),"",10).
 
 global pList is list(). //terrain prediction vecs
 pList:add(0).
@@ -253,6 +252,11 @@ pList:add(vecs_add(v(0,0,0),up:vector * 3,rgb(1,0.2,0.0),"",1.0)).
 pList:add(vecs_add(v(0,0,0),up:vector * 3,rgb(1,0.4,0.0),"",1.0)).
 pList:add(vecs_add(v(0,0,0),up:vector * 3,rgb(1,0.6,0.0),"",1.0)).
 pList:add(vecs_add(v(0,0,0),up:vector * 3,rgb(1,0.8,0.0),"",1.0)). 
+
+//race debug
+set v3 to vecdraw(v(0,0,0),v(0,0,0),rgba(1,1,1,0.5),"",1,true,0.3). //mid line
+set v4 to vecdraw(v(0,0,0),v(0,0,0),rgba(1,1,1,0.5),"",1,true,0.3). //max approach ang line
+set vec_tempFacingLine to vecdraw(v(0,0,0),v(0,0,0),rgba(1,0,0,1),"",1,true,0.4). //cur approach ang line 
 
 set terMark to false.
 set stMark to false.
@@ -356,6 +360,7 @@ function inputs {
 		}
 	}
 }
+
 
 on ag10 {
 	set doFlip to true.
