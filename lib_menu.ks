@@ -316,6 +316,7 @@ function updateLine {
 		local tableWidth is C3-C1.
 		set finalStr to finalStr:substring(0,tableWidth).
 		set finalStr to finalStr:replace("x",nameStr).
+
 	}
 	else {
 		if val = "x"  { 
@@ -343,6 +344,8 @@ function updateLine {
 			set val to val + blinkStr.
 			if not typingNumber and abs(val:tonumber()) > 9999 set valStr to round(val:tonumber() / 1000,1) + " K".
 			else set valStr to val.
+			
+			if activeMenu[line]:length >= 5 set valStr to valStr + activeMenu[line][4]. //suffix
 		}
 		else if valType = "string" or valType = "display" {
 			if typingString {
