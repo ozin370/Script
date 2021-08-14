@@ -90,13 +90,24 @@ set g:skin:verticalslider:bg to "gui/slider_indent.png".
 set g:skin:verticalslider:border:h to -1.
 set g:skin:verticalslider:border:v to 20.
 
+set g:skin:horizontalsliderthumb:bg to "gui/slider_thumb.png".
+set g:skin:horizontalsliderthumb:hover:bg to "gui/slider_thumb.png".
+set g:skin:horizontalsliderthumb:active:bg to "gui/slider_thumb.png".
+set g:skin:horizontalsliderthumb:width to 20.
+set g:skin:horizontalslider:bg to "gui/slider_indent.png".
+set g:skin:horizontalslider:border:h to 20.
+set g:skin:horizontalslider:border:v to -1.
+
 set g:skin:VERTICALSCROLLBAR:bg to "gui/indent.png".
 set g:skin:VERTICALSCROLLBAR:border:v to 20.
 set g:skin:VERTICALSCROLLBARTHUMB:bg to "gui/button.png".
 set g:skin:VERTICALSCROLLBARTHUMB:width to 300.
 set g:skin:VERTICALSCROLLBARleftbutton:bg to "gui/button.png".
 set g:skin:VERTICALSCROLLBARrightbutton:bg to "gui/button.png".
-set g:skin:horizontalSCROLLBARTHUMB:on:bg to "gui/indent.png".
+
+set g:skin:horizontalSCROLLBAR:bg to "gui/indent.png".
+set g:skin:horizontalSCROLLBAR:border:h to 20.
+set g:skin:horizontalSCROLLBARTHUMB:bg to "gui/button.png".
 set g:skin:horizontalSCROLLBARleftbutton:bg to "gui/indent.png".
 set g:skin:horizontalSCROLLBARrightbutton:bg to "gui/indent.png".
 
@@ -220,7 +231,7 @@ set style_label_compact:textcolor to rgb(1,1,1).
 			set tab_box:style:padding:v to 2.
 			set tab_box:style:padding:h to 2.
 			//set tab_box:style:padding:h to 0.
-				global tab_modes is tab_box:addbutton("Runmodes").
+				global tab_modes is tab_box:addbutton("Modes").
 				set tab_modes:style:margin:v to 0.
 				set tab_modes:style:margin:h to 0.
 				set tab_modes:toggle to true.
@@ -233,6 +244,23 @@ set style_label_compact:textcolor to rgb(1,1,1).
 				set tab_options:toggle to true.
 				set tab_options:exclusive to true.
 				set tab_options:onclick to { if tab_options:pressed box_center:showonly(stack_options). }.
+				
+				global tab_tweaks is tab_box:addbutton("Tweaks").
+				set tab_tweaks:style:margin:v to 0.
+				set tab_tweaks:style:margin:h to 0.
+				set tab_tweaks:toggle to true.
+				set tab_tweaks:exclusive to true.
+				set tab_tweaks:onclick to { 
+					if tab_tweaks:pressed box_center:showonly(stack_tweaks). 
+					
+					set g_gravitymod:value to gravitymod.
+					set g_thrustmod:value to thrustmod.
+					set g_climbDampening:value to climbDampening.
+					set g_gravitymod_label:text to "Gravity: " + gravitymod:tostring().
+					set g_thrustmod_label:text to "Thrust: " + thrustmod:tostring().
+					set g_climbDampening_label:text to "climbDampening: " + climbDampening:tostring().
+					
+				}.
 			
 			top_box:addspacing(-1).
 			
@@ -482,6 +510,51 @@ set style_label_compact:textcolor to rgb(1,1,1).
 						
 						box_options:addspacing(-1).
 				
+				// ### Tweaks
+				global stack_tweaks is box_center:addstack().
+					global box_tweaks is stack_tweaks:addvlayout().
+					set box_tweaks:style:margin:h to 0.
+						box_tweaks:addlabel("baseKP:").
+						global b_baseKP is box_tweaks:addhlayout().
+							global g_baseKP is b_baseKP:addhslider(0,20,100).
+							set g_baseKP:style:width to 145.
+							global g_baseKP_val is b_baseKP:addlabel(0 + "x").
+							set g_baseKP_val:style to style_label_compact_val.
+							set g_baseKP:onchange to { parameter val. set base_KP to round(val). set g_baseKP_val:text to base_KP + "x".  }.
+						
+						box_tweaks:addlabel("angular velocity multiplier:").
+						global b_angVelMult is box_tweaks:addhlayout().
+							global g_angVelMult is b_angVelMult:addhslider(0.15,0,0.5).
+							set g_angVelMult:style:width to 145.
+							global g_angVelMult_val is b_angVelMult:addlabel(0 + "x").
+							set g_angVelMult_val:style to style_label_compact_val.
+							set g_angVelMult:onchange to { parameter val. set angVelMult to round(val,2). set g_angVelMult_val:text to angVelMult + "x".  }.
+						
+						
+						global b_gravitymod is box_tweaks:addhlayout().
+							global g_gravitymod is b_gravitymod:addhslider(1,0.5,1.5).
+							set g_gravitymod:style:width to 100.
+							global g_gravitymod_label is b_gravitymod:addlabel("Gravity").
+							set g_gravitymod_label:style to style_label_compact.
+							set g_gravitymod:onchange to { parameter val. set gravitymod to round(val,2). set g_gravitymod_label:text to "Gravity: " + gravitymod:tostring().  }.
+							
+						global b_thrustmod is box_tweaks:addhlayout().
+							global g_thrustmod is b_thrustmod:addhslider(1,0.5,1.5).
+							set g_thrustmod:style:width to 100.
+							global g_thrustmod_label is b_thrustmod:addlabel("Thrust").
+							set g_thrustmod_label:style to style_label_compact.
+							set g_thrustmod:onchange to { parameter val. set thrustmod to round(val,2). set g_thrustmod_label:text to "Thrust: " + thrustmod:tostring().  }.
+						
+						global b_climbDampening is box_tweaks:addhlayout().
+							global g_climbDampening is b_climbDampening:addhslider(0,-0.5,0.5).
+							set g_climbDampening:style:width to 100.
+							global g_climbDampening_label is b_climbDampening:addlabel("climbDampening").
+							set g_climbDampening_label:style to style_label_compact.
+							set g_climbDampening:onchange to { parameter val. set climbDampening to round(val,2). set g_climbDampening_label:text to "climbDampening: " + climbDampening:tostring().  }.
+						
+						
+						box_tweaks:addspacing(-1).
+				
 			//<<
 			
 			set activeMode to r_pos. //initial
@@ -596,6 +669,8 @@ set style_label_compact:textcolor to rgb(1,1,1).
 				global g_height is g_heightbox:addvslider(4.75,30,0.5).
 				set g_height:style:margin:h to 0.
 				set g_height:onchange to { parameter val. set g_height_label_val:text to round(val,2) + "m". set tHeight to val. }.
+				
+			
 		// <<
 		
 		// ### Log ###
@@ -638,7 +713,7 @@ function selectMode { //this is called whenever a new mode is selected in the me
 	
 	if mode = m_follow tarVeh:connection:sendmessage(list(2)). //tell master to stop broadcasting to this drone  
 	
-	set angVelMult to 0.13.
+	set angVelMult to 0.13. 
 	if gui_mode = r_landing {
 		set activeStack to stack_landing.
 		set mode to m_free.
@@ -666,7 +741,7 @@ function selectMode { //this is called whenever a new mode is selected in the me
 		set vecs[markHorV]:show to true.
 		set vecs[markDesired]:show to true.
 		set vecs[markDestination]:show to false.
-		set angVelMult to 0.18.
+		set angVelMult to 0.18. 
 	}
 	else if gui_mode = r_bookmark {
 		set activeStack to stack_bookmark.
@@ -726,11 +801,10 @@ function selectMode { //this is called whenever a new mode is selected in the me
 		set mode to m_race.
 		set submode to m_pos.
 		
-		set gravitymod to 1.2. //1.2
+		set gravitymod to 1. //1.2
 		set thrustmod to 0.95. //.95  
-		set base_kP to 65. 
 		set angVelMult to 0.18.
-		set climbDampening to 0.1. //0.3
+		set climbDampening to 0.
 		
 		setLights(1,0.5,0).
 		if not(defined raceLaps) global raceLaps is 0.
@@ -758,10 +832,9 @@ function selectMode { //this is called whenever a new mode is selected in the me
 	}
 	
 	if not(mode = m_race) {
-		set gravitymod to 1.2.
-		set thrustmod to 0.92.
-		set PID_pitch:kp to 75. //75 
-		set PID_roll:kp to 75. //75 
+		set gravitymod to 1.
+		set thrustmod to 0.8.
+		
 		set climbDampening to 0.15.
 		setLights(0,1,0).
 		
@@ -776,7 +849,7 @@ function selectMode { //this is called whenever a new mode is selected in the me
 		if m:hasaction("extend/retract") m:doaction("extend/retract",false).
 	}
 	
-	
+	set g_angVelMult:value to angVelMult.
 	set tab_modes:pressed to true.
 	
 	if not activeStack:visible 

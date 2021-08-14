@@ -263,14 +263,6 @@ set stMark to false.
 set thMark to false.
 set miscMark to false.
 
-function updateVec {
-	parameter targetVec.
-	set targetVecStar to vxcl(facing:topvector, targetVec).
-	set targetVecTop to vxcl(facing:starvector, targetVec).
-	set vecs[markTar]:vec to targetVec*5.
-	//set vecs[markTarP]:vec to targetVecTop*5.
-	//set vecs[markTarY]:vec to targetVecStar*5.
-}
 // <<
 
 // ### Cam modes ###
@@ -358,9 +350,23 @@ function inputs {
 				set countN to 0.
 			}
 		}
+		
+		
 	}
 }
-
+if true {
+	on ag5 {
+		set angVelMult to angVelMult - 0.05.
+		popup("Angvel mult: " + angVelMult). 
+		return true.
+	}
+	on ag6 {
+		set angVelMult to angVelMult + 0.05.
+		popup("Angvel mult: " + angVelMult). 
+		return true.
+	}
+	
+}
 
 on ag10 {
 	set doFlip to true.
@@ -384,7 +390,8 @@ function toggleCamMode {
 		if camMode = 3 and mode <> m_race set camMode to camMode + 1.
 		if camMode = 4 and not(hasGimbal) set camMode to camMode + 1.
 		if camMode = 5 and not(hastarget) set camMode to camMode + 1.
-		if camMode >= 6 set camMode to 0.
+		
+		if camMode >= 7 set camMode to 0.
 		
 		set extcam:target to ship.
 		
@@ -441,6 +448,19 @@ function toggleCamMode {
 			set extcam:positionupdater to CamTarget@.
 			entry("Camera mode: Target").
 		}
+		else if camMode = 6 {
+			set extcam:positionupdater to DoNothing.
+			set facingAvg to vxcl(upVector, shipFacing):normalized * -5.
+			
+			when true then {
+				
+				set facingAvg to facingAvg * 0.98 + 0.02 * (vxcl(upVector, shipFacing):normalized).
+				set extcam:position to facingAvg:normalized * -6.
+				if camMode = 6 return true.
+			}
+			entry("Camera mode: Locked").
+		}
+		
 		else {
 			set extcam:positionupdater to DoNothing.
 			set extcam:camerafov to 70.
@@ -563,8 +583,8 @@ set focusCamPos to facing:topvector * 1.
 set desiredHV_capped to focusCamPos.
 set vMod to 0.
 set fuel to 100.
-set gravitymod to 1.2.
-set thrustmod to 0.92.
+set gravitymod to 1.
+set thrustmod to 0.8.
 set climbDampening to 0.3.
 set angVelMult to 0.15.
 set h_vel to v(0,0,0).
@@ -610,47 +630,14 @@ if hasMS {
 
 //### PID controllers ###
 //>>
-set base_kP to 50.
-global PID_pitch is pidloop(base_kP, 0, 0.3, -150, 150). //(75, 0, 2, -100, 100).  
+set base_kP to 40.
+set g_baseKP:value to base_KP.
+global PID_pitch is pidloop(base_kP, 0, 0, -170, 170). //(75, 0, 2, -100, 100).  
 //global PID_pitch is P_init(50.0,-100,100). //P_init(50.0,-100,100). 
-global PID_roll is pidloop(base_kP, 0, 0.3, -150, 150). //(75, 0, 2, -100, 100).
+global PID_roll is pidloop(base_kP, 0, 0, -170, 170). //(75, 0, 2, -100, 100).
 //global PID_roll is P_init(50.0,-100,100). //P_init(50.0,-100,100). 
 
-if true {
-	on ag1 {
-		set PID_pitch:kD to PID_pitch:kD - 0.1.
-		set PID_roll:kD to PID_roll:kD - 0.1.
-		popup("Engine balance PID kD: " + PID_pitch:kD).
-		return true.
-	}
-	on ag2 {
-		set PID_pitch:kD to PID_pitch:kD + 0.1.
-		set PID_roll:kD to PID_roll:kD + 0.1.
-		popup("Engine balance PID kD: " + PID_pitch:kD).
-		return true.
-	}
-	on ag3 {
-		set base_kP to base_kP * 0.75.
-		popup("Engine balance PID kP: " + base_kP). 
-		return true.
-	}
-	on ag4 {
-		set base_kP to base_kP * 1.25.
-		popup("Engine balance PID kP: " + base_kP).
-		return true.
-	}
-	on ag5 {
-		set angVelMult to angVelMult - 0.05.
-		popup("Angvel mult: " + angVelMult). 
-		return true.
-	}
-	on ag6 {
-		set angVelMult to angVelMult + 0.05.
-		popup("Angvel mult: " + angVelMult). 
-		return true.
-	}
-	
-}
+
 
 
 global PID_vAcc is pidloop(6,0,0.3,-90,90). //pidloop(8,0,0.5,-90,90).

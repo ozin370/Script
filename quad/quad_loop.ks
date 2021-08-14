@@ -306,8 +306,6 @@ function flightcontroller {
 				wait 0.1.
 				tarVeh:connection:sendmessage("undock").
 				
-				set base_kP to 50.
-				
 				set forceUpdate to true.
 				set freeSpeed to 0.
 				set mode to old_mode.
@@ -564,16 +562,14 @@ function flightcontroller {
 		//set burn_duration to v_vel_abs/abs(max_acc). //fix  
 		//set burn_distance to (v_vel * burn_duration) + (0.5 * max_acc * (burn_duration^2)). //fix  
 		
-		local driftDist is min(0,(tilt/90) * v_vel) * 0.5. 
+		
 		
 		if altErr > 0 { //below target alt
 			set desiredVV to sqrt( 2 * (max(0.01,altErrAbs - v_vel * climbDampening) ) * max_acc ). //sqrt( 2 * (altErrAbs^0.9) * max_acc ). 
 			set desiredVV to max(desiredVV, tan(maxClimbAng) * h_vel_mag * 1.5). //make sure we climb steep enough 
 		}
 		else { //above
-			set desiredVV to sqrt( 2 * max(0.1,altErrAbs + driftDist + v_vel*0.12) * max_acc ). 
-			//set desiredVV to  sqrt( 2 * (altErrAbs * 0.9) * max_acc ).
-			set desiredVV to -desiredVV.
+			set desiredVV to -sqrt( 2 * max(0.001,altErrAbs + ((tilt/90) * v_vel) * 0.5 + v_vel*0.12) * max_acc ). 
 		}
 		
 		
@@ -844,9 +840,7 @@ function flightcontroller {
 		else set tiltCap to (desiredHAcc:mag / maxTWR) * 600. // 600     
 		
 		if targetVecTilt > tiltCap and (altErr > -30 or mode = m_pos or doLanding or hasGimbal) { //cap tilt
-			set rotAx to -vcrs(targetVec, upVector).
-			set targetVec to upVector.
-			set targetVec to angleaxis(tiltCap, rotAx) * targetVec.
+			set targetVec to angleaxis(tiltCap, -vcrs(targetVec, upVector)) * upVector.
 		} 
 		
 		if doFlip {
@@ -856,7 +850,9 @@ function flightcontroller {
 			set targetVec to angleaxis(90, rotAx) * vxcl(rotAx,shipFacing).
 		}
 		
-		updateVec(targetVec).
+		set targetVecStar to vxcl(facing:topvector, targetVec).
+		set targetVecTop to vxcl(facing:starvector, targetVec).
+		if miscMark set vecs[markTar]:vec to targetVec*5.
 		// <<
 		
 		// ################
@@ -888,7 +884,7 @@ function flightcontroller {
 		set roll_err to toRad(vang(shipFacing, targetVecStar)).
 		
 		set pitch_acc to (pitch_torque * (thMid^0.5) * angVelMult) / pitch_inertia.
-		set roll_acc to (roll_torque * (thMid^0.5) * angVelMult) / roll_inertia.
+		set roll_acc to  (roll_torque * (thMid^0.5) * angVelMult) / roll_inertia.
 
 		set pitch_vel_target to ( 2 * pitch_err * pitch_acc)^0.5.
 		set roll_vel_target to ( 2 * roll_err * roll_acc)^0.5.
@@ -928,7 +924,7 @@ function flightcontroller {
 		
 		for l in engsLexList {
 			local thisThrustLimit is min(100,100 + pitch_distr * l["pitchMod"] + roll_distr * l["rollMod"]).
-			if th > 0.7 set thisThrustLimit to max(0, thisThrustLimit).
+			if th > 0.5 set thisThrustLimit to max(0, thisThrustLimit).
 			set thrustDuringSteering to thrustDuringSteering + thisThrustLimit.
 			
 			if thisThrustLimit < 0 and not (l["inReverse"]) {
@@ -942,12 +938,12 @@ function flightcontroller {
 			set l["part"]:thrustlimit to abs(thisThrustLimit).
 
 			if l["hasLight"]  {
-				l["lightModule"]:setfield("light r",  thisThrustLimit/66.66 - 0.5).
-				l["lightModule"]:setfield("light b", 1-  thisThrustLimit/66.66).
+				l["lightModule"]:setfield("light r",  thisThrustLimit/100).
+				l["lightModule"]:setfield("light b", 1 - thisThrustLimit/100).
 			}
 			
 			if thMark {
-				set l["vd"]:VEC to l["part"]:facing:vector * (min(1,th) * 1.5 * engDist * thisThrustLimit/100).
+			//	set l["vd"]:VEC to l["part"]:facing:vector * (min(1,th) * 1.5 * engDist * thisThrustLimit/100).
 				set l["vd"]:START to l["part"]:position.
 				set l["vd"]:color to rgb(thisThrustLimit/100, 0, 1-thisThrustLimit/100).
 			}
@@ -962,10 +958,17 @@ function flightcontroller {
 		//local thrustDuringSteering is (400 - min(100,abs(pitch_distr)) - min(100,abs(roll_distr)))/400.
 		
 		
-		set th to min(1,th / thAvg).
+		set th to min(1,th / thrustDuringSteering).
+		if thMark {
+			for l in engsLexList {
+				local sign is choose -1 if l["inReverse"] else 1.
+				set l["vd"]:VEC to l["part"]:facing:vector * (min(1,th) * 1.5 * sign * engDist * l["part"]:thrustlimit/100).
+			}
+		}
+		
 		
 		if doFlip {
-			if tilt < 120 set th to 1.
+			if tilt < 30 set th to 1. //120
 			else if tilt > 130 doFlip off. 
 		}
 		
